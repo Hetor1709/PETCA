@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mascota ideal · Dopta</title>
+  <meta name="description" content="Responde unas preguntas y descubre qué compañero de hogar encaja mejor contigo.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amaranth:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/paginas.css">
+  <script src="js/tema.js"></script>
+  <script src="js/cargando.js" defer></script>
+</head>
+<body>
+
+  <main class="cuenta">
+    <a class="boton-contorno boton-contorno--icono cuenta__regresar" href="index.html" aria-label="Atrás">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+
+    <section class="cuenta__tarjeta cuestionario__tarjeta" aria-labelledby="titulo-cuestionario">
+      <h1 class="cuenta__titulo" id="titulo-cuestionario">¿Cuál es tu mascota ideal?</h1>
+      <p class="cuenta__subtitulo">Responde estas preguntas y descubre qué compañero de hogar es perfecto para ti.</p>
+
+      <form class="cuestionario" action="#" method="get">
+        <div class="cuestionario__preguntas">
+
+          <fieldset class="pregunta">
+            <legend class="pregunta__titulo">¿Tienes jardín o patio?</legend>
+            <div class="pregunta__opciones">
+              <label class="opcion">
+                <input type="radio" name="jardin" value="si" checked>
+                <span class="opcion__texto">Sí</span>
+              </label>
+              <label class="opcion">
+                <input type="radio" name="jardin" value="no">
+                <span class="opcion__texto">No</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="pregunta">
+            <legend class="pregunta__titulo">¿Cuánto tiempo puedes dedicar al cuidado?</legend>
+            <div class="pregunta__opciones">
+              <label class="opcion">
+                <input type="radio" name="tiempo" value="poco">
+                <span class="opcion__texto">Poco</span>
+              </label>
+              <label class="opcion">
+                <input type="radio" name="tiempo" value="medio" checked>
+                <span class="opcion__texto">Medio</span>
+              </label>
+              <label class="opcion">
+                <input type="radio" name="tiempo" value="mucho">
+                <span class="opcion__texto">Mucho</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="pregunta">
+            <legend class="pregunta__titulo">¿Tienes experiencia con mascotas?</legend>
+            <div class="pregunta__opciones">
+              <label class="opcion">
+                <input type="radio" name="experiencia" value="si" checked>
+                <span class="opcion__texto">Sí</span>
+              </label>
+              <label class="opcion">
+                <input type="radio" name="experiencia" value="no">
+                <span class="opcion__texto">No</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="pregunta">
+            <legend class="pregunta__titulo">¿Prefieres animales activos o tranquilos?</legend>
+            <div class="pregunta__opciones">
+              <label class="opcion">
+                <input type="radio" name="energia" value="activos">
+                <span class="opcion__texto">Activos</span>
+              </label>
+              <label class="opcion">
+                <input type="radio" name="energia" value="tranquilos" checked>
+                <span class="opcion__texto">Tranquilos</span>
+              </label>
+            </div>
+          </fieldset>
+
+        </div>
+
+        <div class="cuestionario__accion">
+          <button class="boton-pastilla" type="button">Descubrir mi mascota ideal</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <footer class="pie">
+    <p>Dopta · Catálogo digital gratuito de animales en adopción</p>
+  </footer>
+
+  <button class="boton-tema" type="button" data-tema-boton aria-label="Cambiar a modo oscuro">
+    <svg class="boton-tema__luna" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    <svg class="boton-tema__sol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+  </button>
+
+</body>
+</html>
