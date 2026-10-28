@@ -3,7 +3,7 @@
    Sin key configurada, la dirección se escribe a mano como antes. */
 const express = require('express');
 const { q } = require('./db');
-const { h, falla, limpiar } = require('./util');
+const { h, falla, limpiar, CP_ALCALDIA, sinAcentos } = require('./util');
 const { limitador } = require('./seguridad');
 
 const r = express.Router();
@@ -73,6 +73,46 @@ r.post('/lugares/sugerencias', limite, h(async (req, res) => {
   res.json({ sugerencias });
 }));
 
+/* Convierte los componentes de Google en la ubicación atomizada de Dopta */
+async function atomizar(componentes, formateada) {
+  // Dirección sin el país, recortada a 200 caracteres (RF-04)
+  const direccion = limpiar(String(formateada || '').replace(/,\s*(México|Mexico|Méx\.?)\s*$/i, '')).slice(0, 200);
+
+  // Busca la alcaldía comparando los componentes de Google con las 16 del catálogo
+  const alcaldias = await q("SELECT id, nombre FROM catalogo_valores WHERE catalogo = 'alcaldia' AND activo = 1");
+  // Solo componentes administrativos: así una calle o colonia llamada "Miguel Hidalgo" no se confunde con la alcaldía
+  const ADMIN = ['sublocality', 'sublocality_level_1', 'locality', 'administrative_area_level_2', 'administrative_area_level_3'];
+  const nombres = componentes
+    .filter((c) => (c.types || []).some((t) => ADMIN.includes(t)))
+    .flatMap((c) => [c.longText, c.shortText]).map(norm);
+  const clave16 = (n) => norm(n).replace(/^la\s+/, '').replace(/\s+de\s+morelos$/, '');
+  // Ubicación atomizada: cada parte de la dirección en su campo
+  // En la CDMX Google suele poner la alcaldía como sublocality_level_1 y la colonia como sublocality_level_2 o neighborhood
+  const esAlcaldia = (t) => norm(t) === 'ciudad de mexico' || alcaldias.some((x) => norm(x.nombre) === norm(t) || norm(t).includes(clave16(x.nombre)));
+  const comp = (...tipos) => {
+    for (const t of tipos) {
+      const c = componentes.find((x) => (x.types || []).includes(t) && !(t.startsWith('sublocality') && esAlcaldia(x.longText)));
+      if (c) return limpiar(String(c.longText || ''));
+    }
+    return '';
+  };
+  const cp = /^\d{5}$/.test(comp('postal_code')) ? comp('postal_code') : '';
+  // La alcaldía se toma del C.P. (más confiable); si no hay C.P., de los nombres administrativos de Google
+  const porCp = cp && CP_ALCALDIA[cp.slice(0, 2)];
+  const alc = (porCp && alcaldias.find((a) => sinAcentos(a.nombre) === sinAcentos(porCp)))
+    || alcaldias.find((a) => nombres.some((n) => n === norm(a.nombre) || n.includes(clave16(a.nombre))));
+
+  return {
+    direccion,
+    calle: comp('route').slice(0, 100),
+    num_ext: comp('street_number').toUpperCase().slice(0, 10),
+    colonia: comp('neighborhood', 'sublocality_level_2', 'sublocality_level_1', 'sublocality').replace(/^col(onia)?\.?\s+/i, '').slice(0, 80),
+    cp,
+    alcaldia_id: alc ? alc.id : null,
+  };
+}
+
+
 /* Detalle del lugar elegido: dirección limpia, alcaldía del catálogo y coordenadas */
 r.post('/lugares/detalle', limite, h(async (req, res) => {
   if (!clave()) falla('El autocompletado de direcciones no está disponible.', 503);
@@ -85,20 +125,33 @@ r.post('/lugares/detalle', limite, h(async (req, res) => {
   const lng = j.location && Number(j.location.longitude);
   if (!enCDMX(lat, lng)) falla('La dirección debe estar dentro de la Ciudad de México.');
 
-  // Dirección sin el país, recortada a 200 caracteres (RF-04)
-  const direccion = limpiar(String(j.formattedAddress || '').replace(/,\s*(México|Mexico|Méx\.?)\s*$/i, '')).slice(0, 200);
+  res.json({ ...(await atomizar(j.addressComponents || [], j.formattedAddress)), lat, lng, place_id: j.id || b.id });
+}));
 
-  // Busca la alcaldía comparando los componentes de Google con las 16 del catálogo
-  const alcaldias = await q("SELECT id, nombre FROM catalogo_valores WHERE catalogo = 'alcaldia' AND activo = 1");
-  // Solo componentes administrativos: así una calle o colonia llamada "Miguel Hidalgo" no se confunde con la alcaldía
-  const ADMIN = ['sublocality', 'sublocality_level_1', 'locality', 'administrative_area_level_2', 'administrative_area_level_3'];
-  const nombres = (j.addressComponents || [])
-    .filter((c) => (c.types || []).some((t) => ADMIN.includes(t)))
-    .flatMap((c) => [c.longText, c.shortText]).map(norm);
-  const clave16 = (n) => norm(n).replace(/^la\s+/, '').replace(/\s+de\s+morelos$/, '');
-  const alc = alcaldias.find((a) => nombres.some((n) => n === norm(a.nombre) || n.includes(clave16(a.nombre))));
-
-  res.json({ direccion, alcaldia_id: alc ? alc.id : null, lat, lng, place_id: j.id || b.id });
+/* Ubicación actual: el navegador da las coordenadas (con permiso del usuario) y Google Geocoding las convierte
+   en dirección. Requiere habilitar "Geocoding API" en la misma key. */
+const GEOCODE = process.env.GOOGLE_GEOCODE_URL || 'https://maps.googleapis.com/maps/api/geocode/json';
+r.post('/lugares/inversa', limite, h(async (req, res) => {
+  if (!clave()) falla('La ubicación automática no está disponible.', 503);
+  const b = req.body || {};
+  const lat = Number(b.lat);
+  const lng = Number(b.lng);
+  if (!enCDMX(lat, lng)) falla('Tu ubicación actual está fuera de la Ciudad de México. Escribe la dirección del refugio.');
+  const ctrl = new AbortController();
+  const reloj = setTimeout(() => ctrl.abort(), 6000);
+  let j;
+  try {
+    const url = `${GEOCODE}?latlng=${lat.toFixed(6)},${lng.toFixed(6)}&language=es&region=mx&result_type=street_address|premise|route&key=${encodeURIComponent(clave())}`;
+    const r2 = await fetch(url, { signal: ctrl.signal });
+    j = await r2.json();
+  } catch {
+    falla('No se pudo obtener la dirección de tu ubicación. Escríbela manualmente.', 502);
+  } finally { clearTimeout(reloj); }
+  if (j.status === 'REQUEST_DENIED') { console.error('Geocoding:', j.error_message); falla('La ubicación automática no está habilitada (activa Geocoding API en tu key de Google).', 503); }
+  const g = (j.results || [])[0];
+  if (!g) falla('No encontramos una dirección para tu ubicación. Escríbela manualmente.', 404);
+  const comps = (g.address_components || []).map((c) => ({ longText: c.long_name, shortText: c.short_name, types: c.types }));
+  res.json({ ...(await atomizar(comps, g.formatted_address)), lat, lng, place_id: RE_PLACE.test(String(g.place_id || '')) ? g.place_id : null });
 }));
 
 module.exports = { router: r, enCDMX, RE_PLACE };

@@ -66,7 +66,7 @@
 
   /* ======================= 3. Cliente de la API ======================= */
   /* Debe coincidir con "version" de package.json: si no, el navegador tiene una copia vieja en caché */
-  const VERSION_APP = '1.2.0';
+  const VERSION_APP = '1.4.0';
   let versionAvisada = false;
   class ErrorApi extends Error {
     constructor(status, mensaje, datos) { super(mensaje || ''); this.status = status; this.datos = datos || {}; }
@@ -155,13 +155,13 @@
     return RAZA[a.raza] ? RAZA[a.raza].nombre : 'Raza no indicada';
   };
   const razaCorta = (a) => (a.raza === 'mestizo' ? 'Mestizo' : (RAZA[a.raza] ? RAZA[a.raza].nombre : 'Raza'));
-  const RE_FOTO = /^[a-f0-9]{32}\.(jpg|png|webp)$/;
-  const imagenAnimal = (a) => (a.foto && RE_FOTO.test(a.foto)
-    ? html`<img src="/fotos/${a.foto}" alt="Foto de ${a.nombre}" loading="lazy" decoding="async">`
-    : dibujo(a));
+  const imagenAnimal = (a) => dibujo(a); // sin fotos: siempre la ilustración de la raza
 
   /* ======================= 6. Iconos ======================= */
   const ICONO = {
+    ojo: seguro('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>'),
+    ojoCerrado: seguro('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.4 10.4 0 0 1 12 19c-6.4 0-10-7-10-7a18.4 18.4 0 0 1 5.1-5.9M9.9 5.2A9.6 9.6 0 0 1 12 5c6.4 0 10 7 10 7a18.6 18.6 0 0 1-2.2 3.2M14.1 14.2a3 3 0 0 1-4.2-4.2"/><path d="M2 2l20 20"/></svg>'),
+    ubicacion: seguro('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>'),
     casa: seguro('<svg class="boton-pastilla__icono" viewBox="0 0 97 126" fill="currentColor" aria-hidden="true"><path d="M45.46 1.23828C47.0357 -0.412501 49.6713 -0.412501 51.2471 1.23828L95.5928 47.6953C98.0221 50.2408 96.218 54.457 92.6992 54.457H88.3535V123.207C88.3534 124.312 87.458 125.207 86.3535 125.207H70.3535C69.249 125.207 68.3536 124.311 68.3535 123.207V90.207C68.3535 89.1025 67.4581 88.207 66.3535 88.207H31.3535C30.249 88.2071 29.3535 89.1025 29.3535 90.207V123.207C29.3534 124.312 28.458 125.207 27.3535 125.207H9.35352C8.80132 125.207 8.35362 124.759 8.35352 124.207V54.457H4.00781C0.489148 54.4569 -1.31494 50.2408 1.11426 47.6953L45.46 1.23828ZM33.3535 61.207C30.5921 61.2071 28.3535 63.2218 28.3535 65.707C28.3535 66.1746 28.433 66.6259 28.5801 67.0498C29.0247 68.3317 29.0248 70.0824 28.5801 71.3643C28.433 71.7883 28.3535 72.2394 28.3535 72.707C28.3536 75.1922 30.5922 77.207 33.3535 77.207C35.2463 77.207 36.8934 76.2601 37.7422 74.8643C38.2671 74.0011 39.0816 73.207 40.0918 73.207H58.8838C59.15 73.2072 59.3535 73.4408 59.3535 73.707C59.3536 76.1922 61.5922 78.207 64.3535 78.207C67.1149 78.207 69.3534 76.1922 69.3535 73.707C69.3535 73.2395 69.274 72.7881 69.127 72.3643C68.6821 71.0821 68.682 69.3309 69.127 68.0488C69.274 67.6251 69.3535 67.1745 69.3535 66.707C69.3535 64.2217 67.1149 62.207 64.3535 62.207C62.4607 62.207 60.8136 63.1539 59.9648 64.5498C59.44 65.4128 58.6253 66.207 57.6152 66.207H38.8232C38.5571 66.2068 38.3536 65.9732 38.3535 65.707C38.3535 63.2217 36.1149 61.207 33.3535 61.207Z"/></svg>'),
     campana: seguro('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>'),
     atras: seguro('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>'),
@@ -204,31 +204,6 @@
   };
 
   /* Contadores de caracteres para campos con maxlength */
-  /* Reduce la foto en el navegador antes de subirla: máximo 1600 px por lado, WebP de buena calidad.
-     Así las subidas son rápidas y caben en el límite de 4.5 MB por petición de Vercel. */
-  async function comprimirFoto(file) {
-    const MAX = 1600;
-    try {
-      const img = await createImageBitmap(file);
-      const k = Math.min(1, MAX / Math.max(img.width, img.height));
-      if (k === 1 && file.size <= 1.5 * 1024 * 1024) { img.close(); return file; }
-      const c = document.createElement('canvas');
-      c.width = Math.round(img.width * k);
-      c.height = Math.round(img.height * k);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      img.close();
-      for (const calidad of [0.82, 0.7, 0.55]) {
-        const blob = await new Promise((ok) => c.toBlob(ok, 'image/webp', calidad));
-        if (!blob || blob.type !== 'image/webp') break; // navegador sin WebP: se usa JPEG
-        if (blob.size <= 3.5 * 1024 * 1024) return new File([blob], 'foto.webp', { type: 'image/webp' });
-      }
-      const jpg = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.8));
-      return jpg ? new File([jpg], 'foto.jpg', { type: 'image/jpeg' }) : file;
-    } catch {
-      return file; // si el navegador no puede procesarla se envía tal cual y el servidor decide
-    }
-  }
-
   function montarContadores(raiz) {
     $$('textarea[maxlength]', raiz).forEach((t) => {
       const c = document.createElement('span');
@@ -281,6 +256,7 @@
         }
       });
       montarContadores(d);
+      montarOjitos(d);
       if (montar) montar(d);
       d.showModal();
       const primero = $('input, select, textarea', d);
@@ -298,11 +274,15 @@
     nombre: 'El nombre debe tener entre 2 y 100 caracteres y solo letras y espacios.',
     refugio: 'El nombre del refugio debe tener de 3 a 120 caracteres.',
     institucion: 'El nombre de la institución debe tener de 3 a 120 caracteres.',
-    direccion: 'La dirección debe tener de 10 a 200 caracteres.',
+    calle: 'La calle debe tener de 3 a 100 caracteres, con letras (puede incluir números y . , - #).',
+    numExt: 'El número exterior debe ser un número (ej. 1200, 15-B o 12A) o S/N si no tiene.',
+    numInt: 'El número interior puede tener hasta 10 letras o números (ej. 3, B, Depto 4).',
+    colonia: 'La colonia debe tener de 3 a 80 caracteres, con letras.',
+    cp: 'El código postal debe tener exactamente 5 dígitos.',
+    cpCdmx: 'El código postal no pertenece a la Ciudad de México (debe estar entre 01000 y 16999).',
     telefono: 'El teléfono debe tener exactamente 10 dígitos numéricos.',
     telefonoReal: 'Ingrese un teléfono real: no puede empezar con 0 o 1 ni ser una serie como 0000000000 o 1234567890.',
     letras: 'El nombre debe incluir letras, no solo números o símbolos.',
-    direccionNumero: 'La dirección debe incluir calle y número (por ejemplo: Av. Universidad 1200, Col. Xoco).',
     horario: 'El horario de apertura debe ser menor que el horario de cierre, en formato HH:MM de 24 horas.',
     aviso: 'Debe aceptar el aviso de privacidad para crear una cuenta.',
     coinciden: 'Las contraseñas no coinciden.',
@@ -321,6 +301,30 @@
   };
   const fallo = (m) => { throw new Error(m); };
 
+  /* Reglas de nombres: idénticas a problemaNombre() en server/util.js */
+  const sinAcentos = (t) => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const GROSERIAS = new Set(['puta', 'puto', 'putas', 'putos', 'pendejo', 'pendeja', 'pendejos', 'pendejas', 'verga', 'vergas',
+    'chinga', 'chingada', 'chingado', 'chingar', 'culero', 'culera', 'culo', 'mierda', 'cabron', 'cabrona', 'mamada', 'mamadas',
+    'joto', 'zorra', 'estupido', 'estupida', 'idiota', 'imbecil', 'pinche', 'marica', 'maricon', 'ojete', 'nazi', 'hitler', 'naco', 'naca']);
+  const GENERICOS = new Set(['perro', 'perra', 'perrito', 'perrita', 'can', 'mascota', 'animal', 'sin nombre', 'ninguno', 'ninguna',
+    'nombre', 'test', 'prueba', 'asdf', 'qwerty', 'xxx', 'na', 'no', 'si', 'desconocido', 'desconocida', 'callejero', 'callejera']);
+  function problemaNombre(texto, tipo) {
+    const n = String(texto || '').trim().replace(/\s+/g, ' ');
+    const plano = sinAcentos(n);
+    if (tipo === 'refugio' && !/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 .,&()\-]+$/.test(n)) return 'El nombre solo puede tener letras, números, espacios y . , & ( ) -';
+    if (/(.)\1\1/.test(plano.replace(/\s/g, ''))) return 'El nombre no puede repetir la misma letra 3 o más veces seguidas.';
+    if (!/[aeiouy]/.test(plano)) return 'El nombre debe incluir al menos una vocal.';
+    if (plano.split(/[^a-z]+/).some((x) => GROSERIAS.has(x))) return 'El nombre contiene palabras no permitidas.';
+    if (tipo === 'perro') {
+      if (GENERICOS.has(plano) || RAZAS.some((x) => sinAcentos(x.nombre) === plano)) return 'Escriba el nombre del perro, no un término genérico o el nombre de su raza.';
+      if (plano.split(' ').length > 3) return 'El nombre del perro puede tener máximo 3 palabras.';
+    }
+    if (tipo === 'persona' && plano.split(' ').length > 6) return 'El nombre puede tener máximo 6 palabras.';
+    if (tipo === 'persona' && plano.split(' ').every((x) => x.length === 1)) return 'Escriba el nombre completo, no solo iniciales.';
+    return null;
+  }
+  const revisarNombre = (n, tipo) => { const p = problemaNombre(n, tipo); if (p) fallo(p); };
+
   /* ======================= 9. Componentes ======================= */
   const botonRegresar = (destino, etiqueta = 'Regresar') => html`
     <a class="boton-contorno boton-contorno--icono" href="${destino}" aria-label="${etiqueta}" data-regresar>${ICONO.atras}</a>`;
@@ -332,7 +336,7 @@
     adoptante: 'Adoptante', refugio: 'Refugio', admin: 'Administrador',
   };
 
-  /* Tarjeta del catálogo: foto o ilustración de la raza */
+  /* Tarjeta del catálogo con la ilustración de la raza */
   const tarjetaAnimal = (a, { enlace = true, pie = '' } = {}) => {
     const interior = html`
       <p class="tarjeta__raza">${razaCorta(a)}</p>
@@ -451,9 +455,27 @@
   const tarjetaRefugio = (r) => html`
     <li><a class="tarjeta-refugio" href="#/refugios/${r.id}">
       <img src="img/logo-dopta.svg" alt="" width="48" height="43">
-      <span class="tarjeta-refugio__texto"><strong>${r.nombre}</strong><span>${r.alcaldia || 'Ciudad de México'}</span></span>
+      <span class="tarjeta-refugio__texto"><strong>${r.nombre}</strong><span>${r.alcaldia || 'Ciudad de México'}${r.km != null ? html` · <b class="distancia">${r.aprox ? '≈ ' : ''}${r.km < 1 ? `${Math.round(r.km * 1000)} m` : `${r.km.toFixed(1)} km`}</b>` : ''}</span></span>
       <span class="insignia insignia--disponible">${r.disponibles} ${r.disponibles === 1 ? 'perro' : 'perros'}</span>
     </a></li>`;
+
+  /* Ubicación actual del navegador (pide permiso al usuario). Solo funciona en https o localhost. */
+  function ubicacionActual() {
+    return new Promise((ok, mal) => {
+      if (!window.isSecureContext || !navigator.geolocation) return mal(new Error('Tu navegador no permite usar la ubicación aquí (se necesita https o localhost).'));
+      navigator.geolocation.getCurrentPosition(
+        (p) => ok({ lat: p.coords.latitude, lng: p.coords.longitude }),
+        (e) => mal(new Error(e.code === 1 ? 'No diste permiso para usar tu ubicación. Actívalo en el candado de la barra de direcciones.' : 'No se pudo obtener tu ubicación. Intenta de nuevo.')),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+      );
+    });
+  }
+  /* Distancia en línea recta (km) entre dos puntos */
+  const distanciaKm = (a, b) => {
+    const rad = (x) => (x * Math.PI) / 180;
+    const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lng - a.lng) / 2) ** 2;
+    return 12742 * Math.asin(Math.sqrt(h));
+  };
 
   /* ¿Está abierto ahora? (hora de la CDMX) */
   const abiertoAhora = (horario) => {
@@ -689,6 +711,8 @@
                 ${insignia(a.estado, ETQ[a.estado])}
                 <span class="insignia">${a.edad}</span>
                 <span class="insignia">${a.tamano}</span>
+                ${a.peso_kg ? html`<span class="insignia">⚖️ ${Number(a.peso_kg)} kg</span>` : ''}
+                ${a.altura_cm ? html`<span class="insignia">📏 ${a.altura_cm} cm</span>` : ''}
                 <span class="insignia">${Number(a.esterilizado) ? `Esterilizado · ${a.fecha_esterilizacion}` : 'Sin esterilizar'}</span>
                 <span class="insignia">Ingreso · ${a.fecha_ingreso}</span>
               </div>
@@ -723,12 +747,26 @@
         const b = $('[data-adoptar]', raiz);
         if (b) {
           b.addEventListener('click', async () => {
+            let tel = '';
+            try { tel = (await api('/cuenta')).telefono || ''; } catch { /* se pide en el formulario */ }
             const ok = await dialogo({
               titulo: `¿Enviar solicitud para ${a.nombre}?`,
               texto: `El refugio ${a.refugio} revisará tu solicitud. Si la aprueba, agendará una cita para que entregues los requisitos en persona.`,
+              cuerpo: html`<label class="campo"><span class="campo__etiqueta">Tu teléfono de contacto</span>
+                <input class="campo__entrada" name="telefono" type="tel" inputmode="numeric" maxlength="10" value="${tel}" placeholder="10 dígitos" required>
+                <span class="campo__ayuda">${tel ? 'Confírmalo o actualízalo: el refugio lo usará para coordinar la cita.' : 'Tu cuenta aún no tiene teléfono: el refugio lo necesita para coordinar la cita.'}</span></label>
+                <label class="campo"><span class="campo__etiqueta">Mensaje para el refugio <span class="opcional">(opcional)</span></span>
+                <textarea class="campo__textarea" name="mensaje" maxlength="500" placeholder="Cuéntale al refugio sobre ti y tu hogar: con quién vives, si tienes otras mascotas, por qué quieres adoptar a ${a.nombre}…"></textarea></label>`,
               confirmar: 'Confirmar solicitud',
-              accion: () => api('/solicitudes', { metodo: 'POST', datos: { animal_id: a.id } })
-                .catch((e) => { throw new Error(textoError(e, 'No se pudo enviar la solicitud. Intente de nuevo.')); }),
+              montar: (d) => soloDigitos(d),
+              accion: async (f) => {
+                const d = datosForm(f);
+                if (!V.telefono(d.telefono)) fallo(M.telefono);
+                if (!V.telefonoReal(d.telefono)) fallo(M.telefonoReal);
+                const mensaje = validarMensaje(d.mensaje);
+                await api('/solicitudes', { metodo: 'POST', datos: { animal_id: a.id, mensaje, telefono: d.telefono } })
+                  .catch((e) => { throw new Error(textoError(e, 'No se pudo enviar la solicitud. Intente de nuevo.')); });
+              },
             });
             if (ok) { aviso('Solicitud enviada. Te avisaremos cuando el refugio responda.'); navegar(); }
           });
@@ -736,6 +774,18 @@
         $$('[data-reportar]', raiz).forEach((btn) => btn.addEventListener('click', () => reportar(btn.dataset.reportar === 'animal' ? 'animal' : 'refugio', btn.dataset.reportar === 'animal' ? a.id : a.refugio_id)));
       },
     };
+  }
+
+  /* Mensaje opcional de la solicitud: mismas reglas que V.mensajeSolicitud() en server/util.js */
+  function validarMensaje(texto) {
+    const m = String(texto || '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+    if (!m) return null;
+    if (!V.entre(m, 10, 500)) fallo('El mensaje debe tener de 10 a 500 caracteres (o déjelo vacío).');
+    if (!V.letras(m, 5)) fallo('El mensaje debe incluir texto, no solo números o símbolos.');
+    if (/(https?:\/\/|www\.|\.(com|mx|net|org|io|ly)\b)/i.test(m)) fallo('El mensaje no puede incluir enlaces.');
+    if (/(.)\1{5,}/.test(m)) fallo('El mensaje no puede repetir el mismo carácter tantas veces seguidas.');
+    if (sinAcentos(m).split(/[^a-z]+/).some((p) => GROSERIAS.has(p))) fallo('El mensaje contiene palabras no permitidas.');
+    return m;
   }
 
   const MOTIVOS = ['Animal no doméstico', 'Contenido inapropiado', 'Información falsa', 'Otro'];
@@ -853,6 +903,8 @@
           <input class="buscador__campo" id="buscar-refugio" type="search" placeholder="Buscar por nombre o alcaldía" value="${q}" maxlength="60" autocomplete="off">
           ${ICONO.lupa}
         </form>
+        <div class="acciones acciones--centro"><button class="boton-contorno boton-contorno--chico" type="button" data-cercanos aria-pressed="false">${ICONO.ubicacion} Más cercanos a mí</button></div>
+        <p class="campo__ayuda centrado" data-cerca-estado aria-live="polite"></p>
         <ul class="refugios contenedor" data-lista aria-busy="true"></ul>
         <p class="buscador__vacio" data-vacio hidden>No encontramos refugios con esa búsqueda.</p>
       </section>`,
@@ -860,11 +912,16 @@
         const campo = $('#buscar-refugio', raiz);
         let n = 0;
         let reloj;
+        let yo = null; // ubicación del usuario cuando pide "Más cercanos"
         const cargar = async () => {
           const k = ++n;
           try {
-            const lista = await api(conQuery('/refugios', { q: campo.value.trim() }));
+            let lista = await api(conQuery('/refugios', { q: campo.value.trim() }));
             if (k !== n) return;
+            if (yo) {
+              lista = lista.map((r) => ({ ...r, km: r.lat != null ? distanciaKm(yo, r) : null }))
+                .sort((x, y) => (x.km ?? 1e9) - (y.km ?? 1e9));
+            }
             $('[data-lista]', raiz).innerHTML = String(html`${lista.map(tarjetaRefugio)}`);
             $('[data-vacio]', raiz).hidden = lista.length > 0;
           } catch (e) { $('[data-vacio]', raiz).hidden = false; $('[data-vacio]', raiz).textContent = textoError(e, 'No se pudo cargar la lista. Intente de nuevo.'); }
@@ -872,6 +929,18 @@
         };
         campo.addEventListener('input', () => { clearTimeout(reloj); reloj = setTimeout(cargar, 280); });
         $('[data-buscador]', raiz).addEventListener('submit', (e) => { e.preventDefault(); cargar(); });
+        const bc = $('[data-cercanos]', raiz);
+        const est = $('[data-cerca-estado]', raiz);
+        bc.addEventListener('click', async () => {
+          if (yo) { yo = null; bc.setAttribute('aria-pressed', 'false'); est.textContent = ''; cargar(); return; }
+          est.textContent = 'Obteniendo tu ubicación…';
+          try {
+            yo = await ubicacionActual();
+            bc.setAttribute('aria-pressed', 'true');
+            est.textContent = 'Ordenados por distancia en línea recta desde tu ubicación (≈ = aproximada por alcaldía). Tu ubicación no se guarda.';
+            cargar();
+          } catch (e) { est.textContent = e.message; }
+        });
         cargar();
       },
     };
@@ -1077,31 +1146,70 @@
   const camposRefugio = (cat, d = {}, conInstitucion = true) => html`
     ${conInstitucion ? html`<div class="campo"><label class="campo__etiqueta" for="institucion">Nombre de la institución</label>
       <input class="campo__entrada" id="institucion" name="institucion" type="text" maxlength="120" value="${d.institucion || ''}" placeholder="Ej. Asociación Patitas A.C." required></div>` : ''}
-    <div class="campo direccion" data-direccion><label class="campo__etiqueta" for="direccion">Dirección</label>
-      <div class="direccion__control">
-        <input class="campo__entrada" id="direccion" name="direccion" type="text" maxlength="200" value="${d.direccion || ''}" placeholder="Calle, número y colonia" autocomplete="off"
-          role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="direccion-lista" required>
-        <ul class="direccion__lista" id="direccion-lista" role="listbox" aria-label="Sugerencias de dirección" hidden></ul>
+    <fieldset class="ubicacion campo--ancho" data-direccion>
+      <legend class="campo__etiqueta">Ubicación del refugio</legend>
+      <div class="campo direccion" data-buscador hidden><label class="campo__etiqueta" for="buscar-dir">Buscar dirección <span class="opcional">(llena los campos por ti)</span></label>
+        <div class="direccion__control">
+          <input class="campo__entrada" id="buscar-dir" type="search" maxlength="200" placeholder="Ej. Av. Universidad 1200" autocomplete="off"
+            role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="direccion-lista">
+          <ul class="direccion__lista" id="direccion-lista" role="listbox" aria-label="Sugerencias de dirección" hidden></ul>
+        </div>
+        <button class="boton-contorno boton-contorno--chico ubicacion__actual" type="button" data-mi-ubicacion>${ICONO.ubicacion} Usar mi ubicación actual</button></div>
+      <div class="ubicacion__rejilla">
+        <div class="campo ubicacion__calle"><label class="campo__etiqueta" for="calle">Calle</label>
+          <input class="campo__entrada" id="calle" name="calle" type="text" maxlength="100" value="${d.calle || ''}" placeholder="Ej. Av. Universidad" autocomplete="address-line1" required></div>
+        <div class="campo"><label class="campo__etiqueta" for="num_ext">Núm. exterior</label>
+          <input class="campo__entrada" id="num_ext" name="num_ext" type="text" maxlength="10" value="${d.num_ext || ''}" placeholder="1200 o S/N" required></div>
+        <div class="campo"><label class="campo__etiqueta" for="num_int">Núm. interior <span class="opcional">(opcional)</span></label>
+          <input class="campo__entrada" id="num_int" name="num_int" type="text" maxlength="10" value="${d.num_int || ''}" placeholder="Ej. 3 o B"></div>
+        <div class="campo ubicacion__colonia"><label class="campo__etiqueta" for="colonia">Colonia</label>
+          <input class="campo__entrada" id="colonia" name="colonia" type="text" maxlength="80" value="${d.colonia || ''}" placeholder="Ej. Xoco" required></div>
+        <div class="campo"><label class="campo__etiqueta" for="cp">Código postal</label>
+          <input class="campo__entrada" id="cp" name="cp" type="text" inputmode="numeric" maxlength="5" pattern="\\d{5}" value="${d.cp || ''}" placeholder="03330" autocomplete="postal-code" required></div>
+        <div class="campo"><label class="campo__etiqueta" for="alcaldia">Alcaldía</label>
+          <select class="campo__entrada" id="alcaldia" name="alcaldia_id" required>${opciones(cat.alcaldia, d.alcaldia_id, 'Selecciona tu alcaldía')}</select></div>
       </div>
       <input type="hidden" name="lat" value="${d.lat ?? ''}"><input type="hidden" name="lng" value="${d.lng ?? ''}"><input type="hidden" name="place_id" value="${d.place_id || ''}">
-      <span class="campo__ayuda" data-dir-estado>${d.lat ? html`📍 Ubicación verificada · <a href="${mapaUrl(d)}" target="_blank" rel="noopener noreferrer">Ver en el mapa</a>` : 'Calle, número y colonia.'}</span></div>
+      <span class="campo__ayuda" data-dir-estado>${d.lat ? html`📍 Ubicación verificada · <a href="${mapaUrl(d)}" target="_blank" rel="noopener noreferrer">Ver en el mapa</a>`
+        : d.direccion && !d.calle ? `Dirección registrada: ${d.direccion}. Complétala por partes.` : 'Al escribir el código postal, la alcaldía se elige sola.'}</span>
+    </fieldset>
     <div class="campo"><label class="campo__etiqueta" for="telefono">Teléfono</label>
       <input class="campo__entrada" id="telefono" name="telefono" type="tel" inputmode="numeric" maxlength="10" pattern="\\d{10}" value="${d.telefono || ''}" placeholder="10 dígitos" required></div>
-    <div class="campo"><label class="campo__etiqueta" for="alcaldia">Alcaldía</label>
-      <select class="campo__entrada" id="alcaldia" name="alcaldia_id">${opciones(cat.alcaldia, d.alcaldia_id, 'Selecciona tu alcaldía')}</select></div>
     <div class="campo campo--ancho"><span class="campo__etiqueta">Horario de atención</span>${editorHorario(d.horario)}</div>`;
 
-  function validarCamposRefugio(f, conInstitucion = true, alcaldiaObligatoria = false) {
+  /* Ubicación atomizada: mismas reglas que V.ubicacion() en server/util.js */
+  const RE_CALLE = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 .,#°\-]+$/;
+  function validarUbicacion(d, cat) {
+    const t = (v) => String(v || '').trim().replace(/\s+/g, ' ');
+    const u = {
+      calle: t(d.calle), num_ext: t(d.num_ext).toUpperCase().replace(/^S\/?N$/, 'S/N'), num_int: t(d.num_int).toUpperCase(),
+      colonia: t(d.colonia).replace(/^col(onia)?\.?\s+/i, ''), cp: t(d.cp), alcaldia_id: Number(d.alcaldia_id) || null,
+    };
+    if (!V.entre(u.calle, 3, 100) || !RE_CALLE.test(u.calle) || !V.letras(u.calle, 3)) fallo(M.calle);
+    if (!/^(S\/N|\d{1,5}[A-Z]?(-[A-Z0-9]{1,3})?)$/.test(u.num_ext) || /^0+\D*$/.test(u.num_ext)) fallo(M.numExt);
+    if (u.num_int && !/^[A-Z0-9][A-Z0-9 .\-]{0,9}$/.test(u.num_int)) fallo(M.numInt);
+    if (!V.entre(u.colonia, 3, 80) || !RE_CALLE.test(u.colonia) || !V.letras(u.colonia, 3)) fallo(M.colonia);
+    if (!/^\d{5}$/.test(u.cp)) fallo(M.cp);
+    const esperada = cat.alcaldia.find((a) => a.cp === u.cp.slice(0, 2));
+    if (Number(u.cp.slice(0, 2)) < 1 || Number(u.cp.slice(0, 2)) > 16) fallo(M.cpCdmx);
+    if (!u.alcaldia_id) fallo(M.alcaldia);
+    if (esperada && esperada.id !== u.alcaldia_id) {
+      const elegida = cat.alcaldia.find((a) => a.id === u.alcaldia_id);
+      fallo(`El código postal ${u.cp} corresponde a ${esperada.nombre}, no a ${elegida ? elegida.nombre : 'la alcaldía elegida'}. Revise el C.P. o la alcaldía.`);
+    }
+    return u;
+  }
+
+  function validarCamposRefugio(f, cat, conInstitucion = true) {
     const d = datosForm(f);
     if (conInstitucion && !V.entre(d.institucion, 3, 120)) fallo(M.institucion);
     if (conInstitucion && !V.letras(d.institucion)) fallo(M.letras);
-    if (!V.entre(d.direccion, 10, 200)) fallo(M.direccion);
-    if (!/\d/.test(d.direccion) || !V.letras(d.direccion, 4)) fallo(M.direccionNumero);
+    if (conInstitucion) revisarNombre(d.institucion, 'refugio');
+    const u = validarUbicacion(d, cat);
     if (!V.telefono(d.telefono)) fallo(M.telefono);
     if (!V.telefonoReal(d.telefono)) fallo(M.telefonoReal);
-    if (alcaldiaObligatoria && !d.alcaldia_id) fallo(M.alcaldia);
     return {
-      institucion: d.institucion, direccion: d.direccion, telefono: d.telefono, alcaldia_id: d.alcaldia_id ? Number(d.alcaldia_id) : null, horario: leerHorario(f),
+      institucion: d.institucion, ...u, telefono: d.telefono, horario: leerHorario(f),
       lat: d.lat ? Number(d.lat) : null, lng: d.lng ? Number(d.lng) : null, place_id: d.place_id || null,
     };
   }
@@ -1121,22 +1229,43 @@
   async function montarDireccion(raiz) {
     const caja = $('[data-direccion]', raiz);
     if (!caja) return;
+    const ayuda = $('[data-dir-estado]', caja);
+    const oculto = (n) => $(`input[name="${n}"]`, caja);
+    const alcaldia = $('select[name="alcaldia_id"]', caja);
+    const campoDe = (n) => $(`[name="${n}"]`, caja);
+    const cat = await catalogos();
+
+    // C.P.: solo dígitos y, al completar 5, la alcaldía se elige sola (los 2 primeros dígitos la indican)
+    const cp = campoDe('cp');
+    const alcaldiaPorCp = () => {
+      if (!/^\d{5}$/.test(cp.value)) return;
+      const a = cat.alcaldia.find((x) => x.activo && x.cp === cp.value.slice(0, 2));
+      if (a) { alcaldia.value = String(a.id); ayuda.textContent = `C.P. ${cp.value}: alcaldía ${a.nombre}.`; }
+      else ayuda.textContent = M.cpCdmx;
+    };
+    cp.addEventListener('input', () => { cp.value = cp.value.replace(/\D/g, '').slice(0, 5); alcaldiaPorCp(); });
+    // Números en mayúsculas (15-B, S/N) y sin símbolos raros
+    ['num_ext', 'num_int'].forEach((n) => campoDe(n).addEventListener('input', (e) => {
+      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9 ./\-]/g, '');
+    }));
+    // Si se edita a mano cualquier parte, las coordenadas anteriores ya no corresponden
+    ['calle', 'num_ext', 'num_int', 'colonia', 'cp', 'alcaldia_id'].forEach((n) => campoDe(n).addEventListener('input', () => {
+      if (!oculto('lat').value) return;
+      oculto('lat').value = ''; oculto('lng').value = ''; oculto('place_id').value = '';
+    }));
+
     if (estado.lugares === undefined) {
       try { estado.lugares = (await api('/lugares/estado', { auto: true })).activo; } catch { estado.lugares = false; }
     }
     if (!estado.lugares) return;
-    const campo = $('input[name="direccion"]', caja);
+    $('[data-buscador]', caja).hidden = false;
+    const campo = $('#buscar-dir', caja);
     const lista = $('.direccion__lista', caja);
-    const ayuda = $('[data-dir-estado]', caja);
-    const oculto = (n) => $(`input[name="${n}"]`, caja);
-    const alcaldia = $('select[name="alcaldia_id"]', raiz);
     let sesion = nuevaSesion();
     let opciones = [];
     let activa = -1;
     let reloj;
     let pedido = 0;
-    ayuda.textContent = 'Empieza a escribir y elige tu dirección de la lista.';
-
     const cerrar = () => { lista.hidden = true; campo.setAttribute('aria-expanded', 'false'); campo.removeAttribute('aria-activedescendant'); activa = -1; };
     const marcar = (i) => {
       activa = i;
@@ -1155,21 +1284,45 @@
       cerrar();
       ayuda.textContent = 'Verificando dirección…';
       try {
-        const d = await api('/lugares/detalle', { metodo: 'POST', datos: { id: o.id, sesion } });
-        campo.value = d.direccion;
-        oculto('lat').value = d.lat; oculto('lng').value = d.lng; oculto('place_id').value = d.place_id;
-        if (d.alcaldia_id && alcaldia) alcaldia.value = String(d.alcaldia_id);
-        ayuda.innerHTML = String(html`📍 Ubicación verificada${d.alcaldia_id ? '' : ' · elige la alcaldía'} · <a href="${mapaUrl(d)}" target="_blank" rel="noopener noreferrer">Ver en el mapa</a>`);
+        rellenar(await api('/lugares/detalle', { metodo: 'POST', datos: { id: o.id, sesion } }));
       } catch (e) {
         ayuda.textContent = textoError(e, 'No se pudo consultar la dirección. Escríbala manualmente.');
       }
       sesion = nuevaSesion(); // cada búsqueda con su detalle es una sesión de cobro de Google
     };
+    // "Usar mi ubicación actual": coordenadas del navegador → dirección (Google Geocoding) → campos
+    $('[data-mi-ubicacion]', caja).addEventListener('click', async (e) => {
+      const b = e.currentTarget;
+      ocupado(b);
+      ayuda.textContent = 'Obteniendo tu ubicación…';
+      try {
+        const pos = await ubicacionActual();
+        ayuda.textContent = 'Buscando la dirección…';
+        rellenar(await api('/lugares/inversa', { metodo: 'POST', datos: pos }));
+      } catch (err) {
+        ayuda.textContent = err instanceof ErrorApi ? textoError(err) : err.message;
+      } finally { ocupado(b, false); }
+    });
+    function rellenar(d) {
+      {
+        campo.value = '';
+        // Cada parte va a su campo; lo que Google no trae queda vacío para completarlo a mano
+        campoDe('calle').value = d.calle || '';
+        campoDe('num_ext').value = d.num_ext || '';
+        campoDe('colonia').value = d.colonia || '';
+        campoDe('cp').value = d.cp || '';
+        if (d.alcaldia_id) alcaldia.value = String(d.alcaldia_id);
+        oculto('lat').value = d.lat; oculto('lng').value = d.lng; oculto('place_id').value = d.place_id;
+        const faltan = [['calle', 'calle'], ['num_ext', 'número exterior'], ['colonia', 'colonia'], ['cp', 'código postal']]
+          .filter(([n]) => !campoDe(n).value).map(([, t]) => t);
+        if (!d.alcaldia_id) faltan.push('alcaldía');
+        ayuda.innerHTML = String(html`📍 Ubicación verificada${faltan.length ? ` · completa: ${faltan.join(', ')}` : ''} · <a href="${mapaUrl(d)}" target="_blank" rel="noopener noreferrer">Ver en el mapa</a>`);
+        const primero = faltan.length && campoDe({ calle: 'calle', 'número exterior': 'num_ext', colonia: 'colonia', 'código postal': 'cp', alcaldía: 'alcaldia_id' }[faltan[0]]);
+        (primero || campoDe('num_int')).focus();
+      }
+    }
 
     campo.addEventListener('input', () => {
-      // Si se edita a mano, las coordenadas anteriores ya no corresponden
-      oculto('lat').value = ''; oculto('lng').value = ''; oculto('place_id').value = '';
-      ayuda.textContent = 'Empieza a escribir y elige tu dirección de la lista.';
       clearTimeout(reloj);
       const texto = campo.value.trim();
       if (texto.length < 3) { opciones = []; return cerrar(); }
@@ -1219,6 +1372,9 @@
             <input class="campo__entrada" id="nombre" name="nombre" type="text" placeholder="Tu nombre completo" autocomplete="name" maxlength="120" required></div>
           <div class="campo"><label class="campo__etiqueta" for="correo">Email</label>
             <input class="campo__entrada" id="correo" name="correo" type="email" placeholder="tu@email.com" autocomplete="email" maxlength="254" required></div>
+          <div class="campo" data-solo-adoptante><label class="campo__etiqueta" for="telefono_adoptante">Teléfono celular</label>
+            <input class="campo__entrada" id="telefono_adoptante" name="telefono_adoptante" type="tel" inputmode="numeric" maxlength="10" placeholder="10 dígitos" autocomplete="tel-national" required>
+            <span class="campo__ayuda">Solo lo verá el refugio al que envíes una solicitud, para coordinar tu cita.</span></div>
           <div class="campo"><label class="campo__etiqueta" for="contrasena">Contraseña</label>
             <input class="campo__entrada" id="contrasena" name="contrasena" type="password" placeholder="••••••••" autocomplete="new-password" maxlength="64" required>
             <span class="campo__ayuda">De 8 a 64 caracteres, con al menos una letra y un número.</span></div>
@@ -1244,6 +1400,7 @@
           if (e.target.name !== 'tipo') return;
           const ref = e.target.value === 'refugio';
           bloque.hidden = !ref;
+          $('[data-solo-adoptante]', f).hidden = ref;
           etq.textContent = ref ? 'Nombre del refugio' : 'Nombre completo';
           f.nombre.placeholder = ref ? 'Ej. Refugio Patitas' : 'Tu nombre completo';
         });
@@ -1260,11 +1417,17 @@
             if (tipo === 'adoptante' && !V.nombre(d.nombre.replace(/\s+/g, ' '))) fallo(M.nombre);
             if (tipo === 'refugio' && !V.entre(d.nombre, 3, 120)) fallo(M.refugio);
             if (tipo === 'refugio' && !V.letras(d.nombre)) fallo(M.letras);
+            revisarNombre(d.nombre, tipo === 'refugio' ? 'refugio' : 'persona');
             if (!V.correo(d.correo)) fallo(M.correo);
             if (!V.contrasena(pass)) fallo(M.contrasena);
             if (pass !== f.confirmar.value) fallo(M.coinciden);
             datos = { tipo, nombre: d.nombre, correo: d.correo, contrasena: pass, confirmar: f.confirmar.value, aviso: f.aviso.checked };
-            if (tipo === 'refugio') Object.assign(datos, validarCamposRefugio(f));
+            if (tipo === 'adoptante') {
+              if (!V.telefono(d.telefono_adoptante)) fallo(M.telefono);
+              if (!V.telefonoReal(d.telefono_adoptante)) fallo(M.telefonoReal);
+              datos.telefono = d.telefono_adoptante;
+            }
+            if (tipo === 'refugio') Object.assign(datos, validarCamposRefugio(f, cat));
             if (!f.aviso.checked) fallo(M.aviso);
           } catch (err) { return errorEn(f, err.message); }
           const b = $('button[type="submit"]', f);
@@ -1311,7 +1474,8 @@
             if (!V.correo(d.correo)) fallo(M.correo);
             if (!V.entre(d.nombre, 3, 120)) fallo(M.refugio);
             if (!V.letras(d.nombre)) fallo(M.letras);
-            datos = { correo: d.correo, contrasena: f.contrasena.value, nombre: d.nombre, ...validarCamposRefugio(f) };
+            revisarNombre(d.nombre, 'refugio');
+            datos = { correo: d.correo, contrasena: f.contrasena.value, nombre: d.nombre, ...validarCamposRefugio(f, cat) };
           } catch (err) { return errorEn(f, err.message); }
           const b = $('button[type="submit"]', f);
           ocupado(b);
@@ -1397,6 +1561,30 @@
   }
 
   /* ---------- RF-07, RF-09, RF-10: mi cuenta ---------- */
+  /* Silueta del usuario con sus iniciales y color propio (cambia según el tipo de cuenta) */
+  function siluetaUsuario(nombre, tipo, grande = false) {
+    const ini = String(nombre || '?').trim().split(/\s+/).filter((p) => /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(p)).slice(0, 2).map((p) => p[0].toUpperCase()).join('') || '?';
+    let tono = 0;
+    for (const ch of String(nombre)) tono = (tono * 31 + ch.codePointAt(0)) % 997;
+    const forma = tipo === 'refugio'
+      ? '<path d="M14 54h36M18 54V30l14-10 14 10v24" stroke-width="3.2" fill="none"/><path d="M27 54v-9a5 5 0 0 1 10 0v9" stroke-width="3.2" fill="none"/>'
+      : tipo === 'admin'
+        ? '<path d="M32 12l17 6v11c0 11-7.5 19-17 23-9.5-4-17-12-17-23V18z" stroke-width="3.2" fill="none"/>'
+        : '<circle cx="32" cy="25" r="10" stroke-width="3.2" fill="none"/><path d="M14 54c2-10 9.5-15 18-15s16 5 18 15" stroke-width="3.2" fill="none"/>';
+    return html`<span class="silueta silueta--t${tono % 8}${grande ? ' silueta--grande' : ''}" aria-hidden="true">
+      ${seguro(`<svg viewBox="0 0 64 64" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">${forma}</svg>`)}
+      <span class="silueta__iniciales">${ini}</span></span>`;
+  }
+  const tarjetaPerfil = (c) => html`
+    <section class="panel perfil-tarjeta">
+      ${siluetaUsuario(c.nombre, c.tipo, true)}
+      <div class="perfil-tarjeta__datos">
+        <p class="perfil-tarjeta__nombre">${c.nombre}</p>
+        <p class="perfil-tarjeta__rol">${{ adoptante: 'Adoptante', refugio: 'Refugio', admin: 'Administrador' }[c.tipo]}${c.refugio ? ` · ${c.refugio.institucion}` : ''}</p>
+        <p class="perfil-tarjeta__meta">${c.correo}${c.telefono ? ` · Tel. ${c.telefono}` : ''} · Miembro desde ${new Intl.DateTimeFormat('es-MX', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${String(c.creado).slice(0, 10)}T12:00:00Z`))}</p>
+      </div>
+    </section>`;
+
   async function vistaCuenta() {
     const c = await api('/cuenta');
     const u = estado.usuario;
@@ -1406,6 +1594,7 @@
       <section class="principal principal--cuenta">
         <div class="contenedor contenedor--estrecho formulario">
           <h1 class="titulo-pagina">Mi cuenta</h1>
+          ${tarjetaPerfil(c)}
           ${u.tipo !== 'admin' ? html`
           <section class="panel">
             <h2 class="panel__titulo">Datos de la cuenta</h2>
@@ -1418,6 +1607,14 @@
               <p class="mensaje mensaje--error" data-error role="alert"></p>
               <button class="boton-contorno" type="submit">Guardar cambios</button>
             </form>
+            ${u.tipo === 'adoptante' ? html`
+            <form class="formulario formulario--linea" novalidate data-telefono>
+              <div class="campo"><label class="campo__etiqueta" for="tel">Teléfono celular</label>
+                <input class="campo__entrada" id="tel" name="telefono" type="tel" inputmode="numeric" maxlength="10" value="${c.telefono || ''}" placeholder="10 dígitos" required>
+                <span class="campo__ayuda">${c.telefono ? 'Solo lo ven los refugios a los que envías una solicitud.' : 'Agrégalo: los refugios lo necesitan para coordinar tu cita.'}</span></div>
+              <p class="mensaje mensaje--error" data-error role="alert"></p>
+              <button class="boton-contorno" type="submit">Guardar teléfono</button>
+            </form>` : ''}
             ${u.tipo === 'refugio' ? html`<p class="cuenta__pie"><a href="#/refugio/perfil">Editar teléfono, dirección y horario</a></p>` : ''}
           </section>` : ''}
           <section class="panel">
@@ -1457,6 +1654,10 @@
             const msg = 'El nombre debe tener de 2 a 100 caracteres, o de 3 a 120 caracteres para una institución.';
             if (u.tipo === 'adoptante' && !V.nombre(d.nombre)) return errorEn(fn, msg);
             if (u.tipo === 'refugio' && (!V.entre(d.nombre, 3, 120) || !V.entre(d.institucion, 3, 120))) return errorEn(fn, msg);
+            const prob = u.tipo === 'refugio'
+              ? problemaNombre(d.nombre, 'refugio') || problemaNombre(d.institucion, 'refugio')
+              : problemaNombre(d.nombre, 'persona');
+            if (prob) return errorEn(fn, prob);
             const b = $('button[type="submit"]', fn);
             ocupado(b);
             try {
@@ -1465,6 +1666,20 @@
               errorEn(fn, '');
               aviso(r.mensaje);
             } catch (err) { errorEn(fn, textoError(err)); } finally { ocupado(b, false); }
+          });
+        }
+        const ft = $('[data-telefono]', raiz);
+        if (ft) {
+          soloDigitos(ft);
+          ft.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const tel = ft.telefono.value.trim();
+            if (!V.telefono(tel)) return errorEn(ft, M.telefono);
+            if (!V.telefonoReal(tel)) return errorEn(ft, M.telefonoReal);
+            const b = $('button[type="submit"]', ft);
+            ocupado(b);
+            try { aviso((await api('/cuenta/telefono', { metodo: 'PUT', datos: { telefono: tel } })).mensaje); errorEn(ft, ''); }
+            catch (err) { errorEn(ft, textoError(err)); } finally { ocupado(b, false); }
           });
         }
         const fp = $('[data-pass]', raiz);
@@ -1538,6 +1753,32 @@
   }
 
   /* ---------- RF-17: mis solicitudes ---------- */
+  /* Aviso corto del refugio dentro de la solicitud */
+  const notaRefugio = (s) => (s.nota_refugio
+    ? html`<blockquote class="mensaje-solicitud mensaje-solicitud--refugio"><span class="mensaje-solicitud__etiqueta">Nota del refugio · ${s.nota_en}</span>${s.nota_refugio}</blockquote>` : '');
+
+  /* Cita de adopción en tabla: qué día, a qué hora, dónde y qué llevar */
+  function tablaCita(s, para) {
+    const filas = para === 'adoptante'
+      ? [
+        ['Día', fechaBonita(s.cita_fecha)],
+        ['Hora', `${s.cita_hora} h`],
+        ['Refugio', s.refugio],
+        ['Dirección', html`${s.direccion} · <a class="enlace" href="${mapaUrl(s, true)}" target="_blank" rel="noopener noreferrer">Cómo llegar</a>`],
+        ['Teléfono', html`<a class="enlace" href="tel:${s.telefono}">${s.telefono}</a>`],
+        ['Qué llevar', s.requisitos && s.requisitos.length ? html`<ul class="tabla-cita__lista">${s.requisitos.map((r) => html`<li>${r}</li>`)}</ul>` : 'Identificación oficial'],
+      ]
+      : [
+        ['Día', fechaBonita(s.cita_fecha)],
+        ['Hora', `${s.cita_hora} h`],
+        ['Adoptante', s.adoptante],
+        ['Teléfono', s.adoptante_telefono ? html`<a class="enlace" href="tel:${s.adoptante_telefono}">${s.adoptante_telefono}</a>` : 'Sin teléfono'],
+        ['Mascota', s.animal],
+      ];
+    return html`<table class="tabla-cita"><caption>📅 Cita de adopción</caption>
+      <tbody>${filas.map(([k, v]) => html`<tr><th scope="row">${k}</th><td>${v}</td></tr>`)}</tbody></table>`;
+  }
+
   async function vistaMisSolicitudes() {
     let lista = null;
     try { lista = await api('/solicitudes/mias'); } catch { /* se muestra el mensaje */ }
@@ -1553,9 +1794,11 @@
               <div>
                 <p class="fila__titulo"><a class="enlace" href="#/animal/${s.animal_id}">${s.animal}</a></p>
                 <p class="fila__meta">${s.refugio} · Enviada ${s.enviada}</p>
+                ${s.mensaje ? html`<blockquote class="mensaje-solicitud"><span class="mensaje-solicitud__etiqueta">Tu mensaje</span>${s.mensaje}</blockquote>` : ''}
+                ${notaRefugio(s)}
                 ${s.estado === 'rechazada' && s.motivo_rechazo ? html`<p class="fila__detalle">Motivo: ${s.motivo_rechazo}</p>` : ''}
                 ${s.concretada_en ? html`<p class="fila__detalle">🎉 Adopción concretada el ${s.concretada_en}</p>`
-    : s.cita_fecha ? html`<p class="fila__detalle"><strong>Cita:</strong> ${fechaBonita(s.cita_fecha)} (${s.cita_fecha}) a las ${s.cita_hora} · ${s.direccion} · Tel. ${s.telefono}. Lleva los requisitos de adopción.</p>`
+    : s.cita_fecha ? tablaCita(s, 'adoptante')
       : s.estado === 'aprobada' ? html`<p class="fila__detalle">El refugio agendará tu cita pronto.</p>` : ''}
               </div>
               <div class="fila__lado">${insignia(s.estado, ETQ[s.estado])}</div>
@@ -1596,6 +1839,7 @@
               ${insignia(a.estado, ETQ[a.estado])}
               <span class="insignia">${nombreCat(cat.edad, a.edad_id)}</span>
               <span class="insignia">${nombreCat(cat.tamano, a.tamano_id)}</span>
+              ${a.peso_kg ? html`<span class="insignia">${Number(a.peso_kg)} kg · ${a.altura_cm} cm</span>` : ''}
               <span class="insignia">${Number(a.esterilizado) ? 'Esterilizado' : 'Sin esterilizar'}</span>
             </div>
             <p><strong>Ingreso:</strong> ${a.fecha_ingreso} · <strong>Publicado:</strong> ${String(a.publicado_en).slice(0, 10)}</p>
@@ -1611,10 +1855,12 @@
           <li class="fila fila--sin-imagen">
             <div>
               <p class="fila__titulo">${x.adoptante}</p>
-              <p class="fila__meta">${x.adoptante_correo} · Enviada ${x.enviada}</p>
+              <p class="fila__meta">${x.adoptante_correo}${x.adoptante_telefono ? ` · Tel. ${x.adoptante_telefono}` : ''} · Enviada ${x.enviada}</p>
+              ${x.mensaje ? html`<blockquote class="mensaje-solicitud"><span class="mensaje-solicitud__etiqueta">Mensaje del adoptante</span>${x.mensaje}</blockquote>` : ''}
               ${x.motivo_rechazo ? html`<p class="fila__detalle">Motivo: ${x.motivo_rechazo}</p>` : ''}
               ${x.concretada_en ? html`<p class="fila__detalle">Adopción concretada el ${x.concretada_en}</p>`
-    : x.cita_fecha ? html`<p class="fila__detalle">Cita: ${fechaBonita(x.cita_fecha)} a las ${x.cita_hora}</p>` : ''}
+    : x.cita_fecha ? tablaCita(x, 'refugio') : ''}
+              ${notaRefugio(x)}
             </div>
             <div class="fila__lado">${insignia(x.estado, ETQ[x.estado])}</div>
           </li>`)}</ul>`}`,
@@ -1704,6 +1950,47 @@
       <select class="campo__entrada" name="req_tipo" aria-label="Tipo de requisito">${opciones(cat.tipo_requisito, r.tipo_id, 'Tipo')}</select>
       <button class="boton-icono" type="button" data-quitar aria-label="Quitar">${ICONO.quitar}</button>
     </div>`;
+  /* Documentos de la lista cerrada (catálogo "documento"): el refugio solo marca los que pide */
+  const listaDocumentos = (cat, actuales = []) => {
+    const elegidos = actuales.filter((r) => !Number(r.otro)).map((r) => r.nombre);
+    const activos_ = activos(cat.documento || []).map((d) => d.nombre);
+    const extra = elegidos.filter((n) => !activos_.includes(n)); // ya elegidos aunque el admin los haya desactivado
+    return html`<div class="documentos" data-documentos>${[...activos_, ...extra].map((n) => html`
+      <label class="documento"><input type="checkbox" data-doc value="${n}"${si(elegidos.includes(n), 'checked')}><span>${n}</span></label>`)}</div>`;
+  };
+
+  /* Dimensiones sugeridas: rango adulto de la raza (o del tamaño en mestizos), ajustado a la edad. Mismas reglas que util.js */
+  const mesesDeEdad = (nombre) => {
+    const m = String(nombre || '').match(/(\d+)\s*(mes|año|ano)/i);
+    return m ? (/^mes/i.test(m[2]) ? Number(m[1]) : Number(m[1]) * 12) : null;
+  };
+  function rangoDims(cat, raza, aprox, tamanoNombre) {
+    const pura = raza && raza !== 'mestizo' && cat.dims.razas[raza];
+    if (pura) return { ...pura, base: `un ${RAZA[raza].nombre}` };
+    const t = cat.dims.tamano[sinAcentos(tamanoNombre || '')];
+    if (!t) return null;
+    const parecido = aprox && cat.dims.razas[aprox];
+    return { ...t, sugerido: parecido || t, base: `un perro de tamaño ${String(tamanoNombre).toLowerCase()}` };
+  }
+  function limitesDims(r, meses) {
+    const r1 = (n) => Math.round(n * 10) / 10;
+    const adulto = meses == null || meses >= 12;
+    return {
+      adulto,
+      peso: [adulto ? r1(r.peso[0] * 0.75) : 0.3, r1(r.peso[1] * (adulto ? 1.3 : 1.1))],
+      altura: [adulto ? Math.floor(r.altura[0] * 0.85) : 8, Math.ceil(r.altura[1] * (adulto ? 1.15 : 1.1))],
+    };
+  }
+  function sugerirDims(r, meses) {
+    const s = r.sugerido || r;
+    const f = meses == null || meses >= 12 ? 1 : Math.max(0.15, meses / 12);
+    const peso = Math.round(((s.peso[0] + s.peso[1]) / 2) * f * 10) / 10;
+    const altura = Math.round(((s.altura[0] + s.altura[1]) / 2) * (0.5 + 0.5 * f));
+    const lim = limitesDims(r, meses);
+    const entre = (v, [a, b]) => Math.min(b, Math.max(a, v));
+    return { peso: entre(peso, lim.peso), altura: entre(altura, lim.altura) };
+  }
+
   /* Vacunas del catálogo con casilla y fecha de aplicación (opción múltiple, máx. 10) */
   const listaVacunas = (cat, actuales = []) => {
     const activas = activos(cat.vacuna || []).map((v) => v.nombre);
@@ -1740,14 +2027,20 @@
             <h1 class="panel__titulo">${id ? `Editar a ${a.nombre}` : 'Agregar mascota al catálogo'}</h1>
             <form class="formulario formulario--dos" novalidate data-animal>
               <div class="campo"><label class="campo__etiqueta" for="nombre">Nombre de la mascota</label>
-                <input class="campo__entrada" id="nombre" name="nombre" type="text" maxlength="50" placeholder="Ej. Luna" value="${a.nombre || ''}" required></div>
+                <input class="campo__entrada" id="nombre" name="nombre" type="text" maxlength="30" placeholder="Ej. Luna" value="${a.nombre || ''}" required></div>
               <div class="campo"><label class="campo__etiqueta" for="fecha_ingreso">Fecha de ingreso al refugio</label>
                 <input class="campo__entrada" id="fecha_ingreso" name="fecha_ingreso" type="date" min="2000-01-01" max="${hoy}" value="${a.fecha_ingreso || hoy}" required></div>
               ${selectorRazas(a.raza || '', a.raza_aprox || '')}
               <div class="campo"><label class="campo__etiqueta" for="edad">Edad</label>
                 <select class="campo__entrada" id="edad" name="edad_id">${opciones(cat.edad, a.edad_id, 'Selecciona la edad')}</select></div>
               <div class="campo"><label class="campo__etiqueta" for="tamano">Tamaño</label>
-                <select class="campo__entrada" id="tamano" name="tamano_id">${opciones(cat.tamano, a.tamano_id, 'Selecciona el tamaño')}</select></div>
+                <select class="campo__entrada" id="tamano" name="tamano_id">${opciones(cat.tamano, a.tamano_id, 'Selecciona el tamaño')}</select>
+                <span class="campo__ayuda" data-tamano-ayuda aria-live="polite"></span></div>
+              <div class="campo"><label class="campo__etiqueta" for="peso">Peso (kg)</label>
+                <input class="campo__entrada campo__entrada--numero" id="peso" name="peso_kg" type="number" inputmode="decimal" min="0.3" max="100" step="0.1" value="${a.peso_kg ?? ''}" placeholder="Ej. 12.5" required></div>
+              <div class="campo"><label class="campo__etiqueta" for="altura">Altura a la cruz (cm)</label>
+                <input class="campo__entrada campo__entrada--numero" id="altura" name="altura_cm" type="number" inputmode="numeric" min="8" max="110" step="1" value="${a.altura_cm ?? ''}" placeholder="Ej. 45" required></div>
+              <p class="campo__ayuda campo--ancho dims-ayuda" data-dims-ayuda aria-live="polite">Elige la raza y la edad para sugerir el peso y la altura.</p>
               <p class="seccion-form">Estado de salud</p>
               ${CAMPOS_SALUD.map((c) => html`<div class="campo campo--ancho">${grupoCerrado(cat, c, a[c])}</div>`)}
               <p class="seccion-form">Temperamento</p>
@@ -1765,21 +2058,12 @@
               <p class="seccion-form">Vacunas <span class="campo__ayuda">(marca las aplicadas y su fecha · hasta 10)</span></p>
               <div class="campo campo--ancho">${listaVacunas(cat, a.vacunas || [])}</div>
 
-              <p class="seccion-form">Requisitos de adopción <span class="campo__ayuda">(hasta 10 · se entregan en persona en la cita)</span></p>
-              <div class="campo campo--ancho"><div class="repetible" data-requisitos>${(a.requisitos || []).map((r) => filaRequisito(cat, r))}</div>
-                <div class="acciones"><button class="boton-contorno boton-contorno--chico" type="button" data-agregar="requisitos">Agregar requisito</button></div>
-                <span class="campo__ayuda">Texto: datos personales (nombre, dirección, teléfono). Documental: documentos o imágenes (identificación, comprobante).</span></div>
-
-              <p class="seccion-form">Foto (opcional)</p>
-              <div class="campo campo--ancho">
-                <label class="subida">${ICONO.subir}
-                  <span class="subida__texto" data-subida-texto>Arrastra o selecciona una foto</span>
-                  <span class="subida__ayuda">PNG, JPG o WebP, máximo 15 MB (se optimiza al subir). Si no subes foto, se mostrará la ilustración de la raza.</span>
-                  <input class="sr-only" type="file" name="foto" accept="image/png, image/jpeg, image/webp"></label>
-                <div class="foto-vista" data-foto-vista>
-                  ${a.foto && RE_FOTO.test(a.foto) ? html`<img src="/fotos/${a.foto}" alt="Foto actual"><label class="campo--casilla campo"><input type="checkbox" name="quitar_foto"> Quitar foto actual</label>` : ''}
-                </div>
-              </div>
+              <p class="seccion-form">Requisitos de adopción <span class="campo__ayuda">(marca los documentos que pides · hasta 10 · se entregan en persona en la cita)</span></p>
+              <div class="campo campo--ancho">${listaDocumentos(cat, a.requisitos || [])}</div>
+              <div class="campo campo--ancho"><span class="campo__etiqueta">Otro requisito <span class="opcional">(si no está en la lista · hasta 3)</span></span>
+                <div class="repetible" data-requisitos>${(a.requisitos || []).filter((r) => Number(r.otro)).map((r) => filaRequisito(cat, r))}</div>
+                <div class="acciones"><button class="boton-contorno boton-contorno--chico" type="button" data-agregar="requisitos">Agregar otro requisito</button></div>
+                <span class="campo__ayuda">Texto: datos personales (nombre, dirección, teléfono). Documental: documentos o imágenes.</span></div>
 
               <p class="mensaje mensaje--error campo--ancho" data-error role="alert"></p>
               <div class="panel__acciones campo--ancho"><button class="boton-contorno boton-contorno--relleno" type="submit">${id ? 'Guardar cambios' : 'Publicar mascota'}</button></div>
@@ -1792,9 +2076,67 @@
         montarRazas(f);
         montarContadores(f);
         const limite = 'Solo se permiten hasta 10 requisitos o hasta 10 vacunas.';
+        /* Tamaño según la raza: en raza pura se asigna solo y se bloquea; en mestizo se sugiere el de la raza parecida */
+        const selTam = $('#tamano', f);
+        const ayudaTam = $('[data-tamano-ayuda]', f);
+        let tamanoManual = !!a.tamano_id && a.raza === 'mestizo';
+        const tamanoDe = (razaId) => {
+          const r = RAZA[razaId];
+          const t = r && activos(cat.tamano).find((x) => sinAcentos(x.nombre) === sinAcentos(r.tamano));
+          return t ? String(t.id) : '';
+        };
+        const sincronizarTamano = () => {
+          const raza = ($('input[name="raza"]:checked', f) || {}).value || '';
+          const aprox = ($('input[name="raza_aprox"]:checked', f) || {}).value || '';
+          const fijo = raza && raza !== 'mestizo' ? tamanoDe(raza) : '';
+          selTam.disabled = !!fijo;
+          selTam.classList.toggle('campo__entrada--fijo', !!fijo);
+          if (fijo) {
+            selTam.value = fijo;
+            ayudaTam.textContent = `Asignado automáticamente: un ${RAZA[raza].nombre} siempre es de tamaño ${selTam.selectedOptions[0].textContent}.`;
+          } else if (raza === 'mestizo') {
+            const sug = tamanoDe(aprox);
+            if (sug && !tamanoManual) selTam.value = sug;
+            ayudaTam.textContent = sug ? `Sugerido por su parecido a ${RAZA[aprox].nombre}. Puedes cambiarlo.` : 'Elige el tamaño según su peso y altura.';
+          } else ayudaTam.textContent = '';
+        };
+        selTam.addEventListener('change', () => { tamanoManual = true; });
+        f.addEventListener('change', (e) => { if (e.target.name === 'raza' || e.target.name === 'raza_aprox') { if (e.target.name === 'raza') tamanoManual = false; sincronizarTamano(); } });
+        sincronizarTamano();
+
+        /* Peso y altura: se sugieren según raza, edad y tamaño hasta que el refugio los cambie a mano */
+        const inPeso = $('#peso', f);
+        const inAltura = $('#altura', f);
+        const ayudaDims = $('[data-dims-ayuda]', f);
+        let dimsManual = !!(a.peso_kg && a.altura_cm);
+        const contexto = () => {
+          const raza = ($('input[name="raza"]:checked', f) || {}).value || '';
+          const aprox = ($('input[name="raza_aprox"]:checked', f) || {}).value || '';
+          const tam = selTam.value ? selTam.selectedOptions[0].textContent : '';
+          const edad = $('#edad', f).value ? $('#edad', f).selectedOptions[0].textContent : '';
+          return { r: rangoDims(cat, raza, aprox, tam), meses: mesesDeEdad(edad) };
+        };
+        const sincronizarDims = (forzar = false) => {
+          const { r, meses } = contexto();
+          if (!r) { ayudaDims.textContent = 'Elige la raza (y el tamaño si es mestizo) para sugerir el peso y la altura.'; return; }
+          const l = limitesDims(r, meses);
+          const sug = sugerirDims(r, meses);
+          if (!dimsManual || forzar) { inPeso.value = sug.peso; inAltura.value = sug.altura; }
+          ayudaDims.innerHTML = String(html`📏 Típico de ${r.base} adulto: <strong>${r.peso[0]}–${r.peso[1]} kg</strong> y <strong>${r.altura[0]}–${r.altura[1]} cm</strong>.
+            ${l.adulto ? '' : `Como es cachorro, se aceptan valores menores (máx. ${l.peso[1]} kg y ${l.altura[1]} cm). `}
+            ${dimsManual ? html`<button class="enlace" type="button" data-dims-sugerir>Usar ${sug.peso} kg y ${sug.altura} cm</button>` : 'Valores sugeridos: ajústalos si lo pesaste o mediste.'}`);
+        };
+        [inPeso, inAltura].forEach((x) => x.addEventListener('input', () => { dimsManual = true; }));
+        f.addEventListener('change', (e) => { if (['raza', 'raza_aprox', 'edad_id', 'tamano_id'].includes(e.target.name)) sincronizarDims(); });
+        f.addEventListener('click', (e) => { if (e.target.closest('[data-dims-sugerir]')) { dimsManual = false; sincronizarDims(true); } });
+        sincronizarDims();
+        $$('[data-doc]', f).forEach((c) => c.addEventListener('change', () => {
+          if (c.checked && $$('[data-doc]:checked', f).length + $('[data-requisitos]', f).children.length > 10) { c.checked = false; errorEn(f, limite); }
+        }));
         $$('[data-agregar]', f).forEach((b) => b.addEventListener('click', () => {
           const caja = $(`[data-${b.dataset.agregar}]`, f);
-          if (caja.children.length >= 10) return errorEn(f, limite);
+          if (caja.children.length >= 3) return errorEn(f, 'Puede agregar hasta 3 requisitos en "Otro".');
+          if (caja.children.length + $$('[data-doc]:checked', f).length >= 10) return errorEn(f, limite);
           caja.insertAdjacentHTML('beforeend', String(filaRequisito(cat)));
           $('input', caja.lastElementChild).focus();
         }));
@@ -1808,23 +2150,6 @@
           if (c.checked) fecha.focus(); else fecha.value = '';
         }));
         f.addEventListener('change', (e) => { if (e.target.name === 'esterilizado') $('[data-fecha-est]', f).hidden = e.target.value !== 'si'; });
-        const archivo = $('input[type="file"]', f);
-        const subida = $('.subida', f);
-        ['dragover', 'dragenter'].forEach((ev) => subida.addEventListener(ev, (e) => { e.preventDefault(); subida.classList.add('arrastrando'); }));
-        subida.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files[0]) { archivo.files = e.dataTransfer.files; archivo.dispatchEvent(new Event('change', { bubbles: true })); } });
-        archivo.addEventListener('change', () => {
-          const file = archivo.files[0];
-          const vista = $('[data-foto-vista]', f);
-          if (!file) return;
-          if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 15 * 1024 * 1024) {
-            archivo.value = '';
-            return errorEn(f, 'La foto debe ser PNG, JPG o WebP de máximo 15 MB.');
-          }
-          errorEn(f, '');
-          $('[data-subida-texto]', f).textContent = file.name;
-          const url = URL.createObjectURL(file);
-          vista.innerHTML = String(html`<img src="${url}" alt="Vista previa">`);
-        });
 
         f.addEventListener('submit', async (e) => {
           e.preventDefault();
@@ -1834,10 +2159,11 @@
             const d = datosForm(f);
             const raza = ($('input[name="raza"]:checked', f) || {}).value;
             const aprox = ($('input[name="raza_aprox"]:checked', f) || {}).value || null;
-            if (!V.entre(d.nombre, 2, 50)) fallo('El nombre del animal debe tener de 2 a 50 caracteres.');
-            if (!V.letras(d.nombre)) fallo('El nombre del animal debe incluir letras.');
+            if (!V.entre(d.nombre, 2, 30) || !V.nombre(d.nombre)) fallo('El nombre del perro debe tener de 2 a 30 caracteres, solo letras y espacios.');
+            revisarNombre(d.nombre, 'perro');
             if (!raza) fallo('Seleccione la raza del animal.');
             if (!d.edad_id) fallo('Seleccione la edad del animal.');
+            d.tamano_id = $('#tamano', f).value; // puede estar bloqueado (raza pura): se lee directo del selector
             if (!d.tamano_id) fallo('Seleccione el tamaño del animal.');
             const cerrados = {};
             [...CAMPOS_SALUD, ...CAMPOS_TEMP].forEach((c) => {
@@ -1853,12 +2179,27 @@
               if (nacimiento && fecha < nacimiento) fallo(`La fecha de ${que} (${fecha}) es anterior al nacimiento estimado por su edad (${edadNombre}). Revise la fecha o la edad.`);
             };
             pasada(d.fecha_ingreso, 'ingreso');
-            const requisitos = $$('[data-requisitos] .repetible__fila', f).map((r) => {
-              const nombre = $('[name="req_nombre"]', r).value.trim();
+            // Peso y altura coherentes con la raza (o el tamaño) y la edad
+            const peso = Number(d.peso_kg);
+            const altura = Number(d.altura_cm);
+            if (!d.peso_kg || !(peso >= 0.3 && peso <= 100)) fallo('Indique el peso en kilos (entre 0.3 y 100 kg).');
+            if (!d.altura_cm || !(altura >= 8 && altura <= 110)) fallo('Indique la altura a la cruz en centímetros (entre 8 y 110 cm).');
+            const { r: rd, meses } = contexto();
+            if (rd) {
+              const l = limitesDims(rd, meses);
+              const quien = `${rd.base} ${l.adulto ? 'adulto' : 'cachorro'}`;
+              if (peso < l.peso[0] || peso > l.peso[1]) fallo(`El peso no es coherente: para ${quien} se acepta de ${l.peso[0]} a ${l.peso[1]} kg. Revise el peso, la raza o la edad.`);
+              if (altura < l.altura[0] || altura > l.altura[1]) fallo(`La altura no es coherente: para ${quien} se acepta de ${l.altura[0]} a ${l.altura[1]} cm. Revise la altura, la raza o la edad.`);
+            }
+            const documentos = $$('[data-doc]:checked', f).map((c) => ({ nombre: c.value, otro: false }));
+            const otros = $$('[data-requisitos] .repetible__fila', f).map((r) => {
+              const nombre = $('[name="req_nombre"]', r).value.trim().replace(/\s+/g, ' ');
               const tipo = Number($('[name="req_tipo"]', r).value);
-              if (!V.entre(nombre, 3, 100) || !tipo) fallo('Cada requisito debe tener de 3 a 100 caracteres y un tipo Texto o Documental.');
-              return { nombre, tipo_id: tipo };
+              if (!V.entre(nombre, 3, 100) || !V.letras(nombre, 3) || !tipo) fallo('Cada requisito "Otro" debe tener de 3 a 100 caracteres, con letras, y un tipo Texto o Documental.');
+              return { nombre, tipo_id: tipo, otro: true };
             });
+            if (otros.length > 3) fallo('Puede agregar hasta 3 requisitos en "Otro".');
+            const requisitos = [...documentos, ...otros];
             const nombresReq = requisitos.map((x) => x.nombre.toLowerCase());
             if (new Set(nombresReq).size !== nombresReq.length) fallo('Hay requisitos repetidos. Cada requisito debe aparecer una sola vez.');
             const vacunas = $$('[data-vac]:checked', f).map((c) => {
@@ -1872,21 +2213,14 @@
             if (ester) { if (!d.fecha_esterilizacion) fallo('Ingrese la fecha de esterilización.'); pasada(d.fecha_esterilizacion, 'esterilización'); }
             datos = {
               nombre: d.nombre, raza, raza_aprox: raza === 'mestizo' ? aprox : null, edad_id: Number(d.edad_id), tamano_id: Number(d.tamano_id),
-              ...cerrados, fecha_ingreso: d.fecha_ingreso, requisitos, vacunas,
-              esterilizado: ester, fecha_esterilizacion: ester ? d.fecha_esterilizacion : null, quitar_foto: !!(f.quitar_foto && f.quitar_foto.checked),
+              ...cerrados, fecha_ingreso: d.fecha_ingreso, requisitos, vacunas, peso_kg: peso, altura_cm: altura,
+              esterilizado: ester, fecha_esterilizacion: ester ? d.fecha_esterilizacion : null,
             };
           } catch (err) { return errorEn(f, err.message); }
-          const form = new FormData();
-          form.append('datos', JSON.stringify(datos));
           const b = $('button[type="submit"]', f);
           ocupado(b);
           try {
-            if (archivo.files[0]) {
-              const foto = await comprimirFoto(archivo.files[0]);
-              if (foto.size > 4 * 1024 * 1024) throw new Error('La foto es demasiado pesada aun optimizada. Use una imagen más pequeña.');
-              form.append('foto', foto, foto.name || archivo.files[0].name);
-            }
-            const r = await api(id ? `/refugio/animales/${id}` : '/refugio/animales', { metodo: id ? 'PUT' : 'POST', form });
+            const r = await api(id ? `/refugio/animales/${id}` : '/refugio/animales', { metodo: id ? 'PUT' : 'POST', datos });
             aviso(r.mensaje);
             location.hash = '#/refugio';
           } catch (err) {
@@ -1953,15 +2287,18 @@
     const acciones = (s) => {
       if (s.estado === 'pendiente') {
         return html`<button class="boton-contorno boton-contorno--chico boton-contorno--relleno" type="button" data-accion="aprobar" data-id="${s.id}">Aprobar</button>
-          <button class="boton-contorno boton-contorno--chico boton-contorno--peligro" type="button" data-accion="rechazar" data-id="${s.id}">Rechazar</button>`;
+          <button class="boton-contorno boton-contorno--chico boton-contorno--peligro" type="button" data-accion="rechazar" data-id="${s.id}">Rechazar</button>
+          ${botonNota(s)}`;
       }
       if (s.estado === 'aprobada' && !s.concretada_en && s.animal_estado === 'disponible') {
         return html`<button class="boton-contorno boton-contorno--chico" type="button" data-accion="cita" data-id="${s.id}">${s.cita_fecha ? 'Reprogramar cita' : 'Agendar cita'}</button>
           <button class="boton-contorno boton-contorno--chico boton-contorno--relleno" type="button" data-accion="adopcion" data-id="${s.id}">Marcar adopción</button>
-          <button class="boton-contorno boton-contorno--chico boton-contorno--peligro" type="button" data-accion="rechazar" data-id="${s.id}">Cancelar aprobación</button>`;
+          <button class="boton-contorno boton-contorno--chico boton-contorno--peligro" type="button" data-accion="rechazar" data-id="${s.id}">Cancelar aprobación</button>
+          ${botonNota(s)}`;
       }
       return '';
     };
+    const botonNota = (s) => html`<button class="boton-contorno boton-contorno--chico" type="button" data-accion="nota" data-id="${s.id}">${s.nota_refugio ? 'Editar nota' : 'Dejar nota'}</button>`;
     return {
       html: html`
       <section class="principal">
@@ -1977,10 +2314,12 @@
               <button class="boton-ficha" type="button" data-ver="${s.animal_id}" aria-label="Ver ficha de ${s.animal}"><span class="fila__imagen">${dibujo(s)}</span></button>
               <div>
                 <p class="fila__titulo"><button class="enlace" type="button" data-ver="${s.animal_id}">${s.animal}</button></p>
-                <p class="fila__meta">${s.adoptante} · ${s.adoptante_correo} · Enviada ${s.enviada}</p>
+                <p class="fila__meta">${s.adoptante} · ${s.adoptante_correo}${s.adoptante_telefono ? html` · <a class="enlace" href="tel:${s.adoptante_telefono}">Tel. ${s.adoptante_telefono}</a>` : ''} · Enviada ${s.enviada}</p>
+                ${s.mensaje ? html`<blockquote class="mensaje-solicitud"><span class="mensaje-solicitud__etiqueta">Mensaje del adoptante</span>${s.mensaje}</blockquote>` : ''}
+                ${notaRefugio(s)}
                 ${s.motivo_rechazo ? html`<p class="fila__detalle">Motivo: ${s.motivo_rechazo}</p>` : ''}
                 ${s.concretada_en ? html`<p class="fila__detalle">Adopción concretada el ${s.concretada_en}</p>`
-    : s.cita_fecha ? html`<p class="fila__detalle">Cita: ${fechaBonita(s.cita_fecha)} (${s.cita_fecha}) a las ${s.cita_hora}</p>` : ''}
+    : s.cita_fecha ? tablaCita(s, 'refugio') : ''}
               </div>
               <div class="fila__lado">${insignia(s.estado, ETQ[s.estado])}<div class="acciones">${acciones(s)}</div></div>
             </li>`)}</ul>`}
@@ -2009,6 +2348,22 @@
                 await api(`/refugio/solicitudes/${s.id}/rechazar`, { metodo: 'POST', datos: { motivo: m } });
               },
             });
+          } else if (b.dataset.accion === 'nota') {
+            ok = await dialogo({
+              titulo: `Nota para ${s.adoptante}`,
+              texto: 'Un aviso corto que el adoptante verá en su solicitud y recibirá como notificación (ej. "Trae a toda tu familia a la cita").',
+              cuerpo: html`<label class="campo"><span class="campo__etiqueta">Nota</span><textarea class="campo__textarea" name="nota" maxlength="200" placeholder="De 5 a 200 caracteres. Déjala vacía para quitarla.">${s.nota_refugio || ''}</textarea></label>`,
+              confirmar: 'Guardar nota',
+              accion: async (f) => {
+                const n = f.nota.value.trim().replace(/\s+/g, ' ');
+                if (n && !V.entre(n, 5, 200)) fallo('La nota debe tener de 5 a 200 caracteres.');
+                if (n && !V.letras(n, 3)) fallo('La nota debe incluir texto, no solo números o símbolos.');
+                if (/(https?:\/\/|www\.)/i.test(n)) fallo('La nota no puede incluir enlaces.');
+                if (sinAcentos(n).split(/[^a-z]+/).some((p) => GROSERIAS.has(p))) fallo('La nota contiene palabras no permitidas.');
+                aviso((await api(`/refugio/solicitudes/${s.id}/nota`, { metodo: 'PUT', datos: { nota: n } })).mensaje);
+              },
+            });
+            if (ok) { navegar(); return; }
           } else if (b.dataset.accion === 'cita') {
             ok = await agendarCita(s);
           } else if (b.dataset.accion === 'adopcion') {
@@ -2059,7 +2414,7 @@
         f.addEventListener('submit', async (e) => {
           e.preventDefault();
           let datos;
-          try { datos = validarCamposRefugio(f, false, true); } catch (err) { return errorEn(f, err.message); }
+          try { datos = validarCamposRefugio(f, cat, false); } catch (err) { return errorEn(f, err.message); }
           const b = $('button[type="submit"]', f);
           ocupado(b);
           try {
@@ -2315,7 +2670,7 @@
   /* RF-29 a RF-31 */
   async function vistaAdminCatalogos() {
     const cat = await catalogos(true);
-    const NOMBRES = { tamano: 'Tamaños', edad: 'Rangos de edad', tipo_requisito: 'Tipos de requisito', vacuna: 'Vacunas' };
+    const NOMBRES = { tamano: 'Tamaños', edad: 'Rangos de edad', tipo_requisito: 'Tipos de requisito', vacuna: 'Vacunas', documento: 'Documentos requeridos' };
     return {
       html: marcoAdmin('#/admin/catalogos', 'Catálogos', html`
         <div class="catalogos">${Object.entries(NOMBRES).map(([k, t]) => html`
@@ -2509,6 +2864,33 @@
     const r = $('[data-reintentar]', app);
     if (r) r.addEventListener('click', navegar);
     if (res && res.montar) res.montar(app);
+    montarOjitos(app);
+  }
+
+  /* Botón "ojito" para mostrar u ocultar cualquier contraseña */
+  function montarOjitos(raiz) {
+    $$('input[type="password"]', raiz).forEach((inp) => {
+      if (inp.closest('.clave')) return;
+      const caja = document.createElement('span');
+      caja.className = 'clave';
+      inp.replaceWith(caja);
+      caja.append(inp);
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'clave__ojo';
+      b.setAttribute('aria-label', 'Mostrar contraseña');
+      b.setAttribute('aria-pressed', 'false');
+      b.innerHTML = String(ICONO.ojo);
+      b.addEventListener('click', () => {
+        const ver = inp.type === 'password';
+        inp.type = ver ? 'text' : 'password';
+        b.setAttribute('aria-pressed', String(ver));
+        b.setAttribute('aria-label', ver ? 'Ocultar contraseña' : 'Mostrar contraseña');
+        b.innerHTML = String(ver ? ICONO.ojoCerrado : ICONO.ojo);
+        inp.focus();
+      });
+      caja.append(b);
+    });
   }
 
   /* Barra de navegación según el rol */

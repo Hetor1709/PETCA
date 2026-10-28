@@ -24,13 +24,14 @@ CREATE TABLE IF NOT EXISTS usuarios (
   purgado          TINYINT(1)   NOT NULL DEFAULT 0,
   eliminado_motivo VARCHAR(300) NULL,
   eliminado_en     DATETIME     NULL,
+  telefono         CHAR(10)     NULL,          -- del adoptante: el refugio lo ve en sus solicitudes
   UNIQUE KEY uq_correo (correo),
   KEY ix_tipo_estado (tipo, estado)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS catalogo_valores (
   id        INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  catalogo  ENUM('tamano','edad','tipo_requisito','alcaldia','vacuna') NOT NULL,
+  catalogo  ENUM('tamano','edad','tipo_requisito','alcaldia','vacuna','documento') NOT NULL,
   nombre    VARCHAR(50) NOT NULL,
   orden     INT NOT NULL DEFAULT 0,
   activo    TINYINT(1) NOT NULL DEFAULT 1,
@@ -40,7 +41,12 @@ CREATE TABLE IF NOT EXISTS catalogo_valores (
 CREATE TABLE IF NOT EXISTS refugios (
   usuario_id   INT UNSIGNED PRIMARY KEY,
   institucion  VARCHAR(120) NOT NULL,
-  direccion    VARCHAR(200) NOT NULL,
+  direccion    VARCHAR(200) NOT NULL,       -- texto armado con los campos de abajo (para mostrar)
+  calle        VARCHAR(100) NULL,
+  num_ext      VARCHAR(10)  NULL,
+  num_int      VARCHAR(10)  NULL,
+  colonia      VARCHAR(80)  NULL,
+  cp           CHAR(5)      NULL,
   telefono     CHAR(10)     NOT NULL,
   alcaldia_id  INT UNSIGNED NULL,
   lat          DECIMAL(9,6) NULL,          -- coordenadas de Google Places (opcional)
@@ -81,7 +87,8 @@ CREATE TABLE IF NOT EXISTS animales (
   fecha_ingreso        DATE NOT NULL,
   esterilizado         TINYINT(1) NOT NULL DEFAULT 0,
   fecha_esterilizacion DATE NULL,
-  foto                 VARCHAR(80) NULL,
+  peso_kg              DECIMAL(4,1) NULL,    -- dimensiones (sugeridas según la raza y la edad)
+  altura_cm            SMALLINT UNSIGNED NULL,
   estado               ENUM('disponible','adoptado') NOT NULL DEFAULT 'disponible',
   adoptado_en          DATE NULL,
   eliminado            TINYINT(1) NOT NULL DEFAULT 0,
@@ -103,6 +110,7 @@ CREATE TABLE IF NOT EXISTS requisitos (
   animal_id  INT UNSIGNED NOT NULL,
   nombre     VARCHAR(100) NOT NULL,
   tipo_id    INT UNSIGNED NOT NULL,
+  otro       TINYINT(1) NOT NULL DEFAULT 0,   -- 1 = escrito por el refugio (fuera de la lista de documentos)
   CONSTRAINT fk_req_animal FOREIGN KEY (animal_id) REFERENCES animales(id) ON DELETE CASCADE,
   CONSTRAINT fk_req_tipo   FOREIGN KEY (tipo_id)   REFERENCES catalogo_valores(id)
 ) ENGINE=InnoDB;
@@ -122,6 +130,9 @@ CREATE TABLE IF NOT EXISTS solicitudes (
   adoptante_id   INT UNSIGNED NOT NULL,
   estado         ENUM('pendiente','aprobada','rechazada') NOT NULL DEFAULT 'pendiente',
   motivo_rechazo VARCHAR(300) NULL,
+  mensaje        VARCHAR(500) NULL,          -- mensaje opcional del adoptante para el refugio
+  nota_refugio   VARCHAR(200) NULL,          -- aviso corto del refugio al adoptante
+  nota_en        DATETIME NULL,
   enviada_en     DATETIME NOT NULL,
   aprobada_en    DATETIME NULL,
   rechazada_en   DATETIME NULL,
@@ -145,13 +156,6 @@ CREATE TABLE IF NOT EXISTS citas (
   CONSTRAINT fk_cit_refugio   FOREIGN KEY (refugio_id)   REFERENCES refugios(usuario_id)
 ) ENGINE=InnoDB;
 
--- ---------- Fotos (se usan cuando el sitio corre en Vercel o con ALMACEN_FOTOS=bd) ----------
-CREATE TABLE IF NOT EXISTS fotos (
-  nombre     CHAR(37) PRIMARY KEY,
-  tipo       VARCHAR(20) NOT NULL,
-  datos      MEDIUMBLOB NOT NULL,
-  creada_en  DATETIME NOT NULL
-) ENGINE=InnoDB;
 
 -- ---------- Notificaciones ----------
 CREATE TABLE IF NOT EXISTS notificaciones (
@@ -242,4 +246,13 @@ INSERT IGNORE INTO catalogo_valores (catalogo, nombre, orden) VALUES
  ('vacuna','Parainfluenza',6),
  ('vacuna','Bordetella (tos de las perreras)',7),
  ('vacuna','Coronavirus canino',8),
- ('vacuna','Múltiple (quíntuple o séxtuple)',9);
+ ('vacuna','Múltiple (quíntuple o séxtuple)',9),
+ ('documento','Identificación oficial vigente (INE o pasaporte)',1),
+ ('documento','Comprobante de domicilio reciente',2),
+ ('documento','CURP',3),
+ ('documento','Comprobante de ingresos',4),
+ ('documento','Carta responsiva de adopción firmada',5),
+ ('documento','Fotografías del espacio donde vivirá',6),
+ ('documento','Dos referencias personales con teléfono',7),
+ ('documento','Permiso del arrendador (si rentas)',8),
+ ('documento','Aceptación de todos los que viven en el hogar',9);

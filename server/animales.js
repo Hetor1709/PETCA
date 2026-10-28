@@ -1,36 +1,44 @@
 /* Catálogo público y gestión de publicaciones del Refugio (RF-11 a RF-15, RF-35, RNF-01, RNF-02). */
 const express = require('express');
-const multer = require('multer');
 const { q, uno, tx } = require('./db');
 const {
-  h, V, falla, limpiar, ahora, hoy, esFecha, periodo, notificar, RAZAS_LISTA, OPCIONES_ANIMAL, CAMPOS_ANIMAL, FECHA_MIN, tieneLetras, nacimientoMinimo,
+  h, V, falla, limpiar, ahora, hoy, esFecha, periodo, notificar, RAZAS_LISTA, OPCIONES_ANIMAL, CAMPOS_ANIMAL, FECHA_MIN, tamanoDeRaza, nacimientoMinimo, CP_ALCALDIA, sinAcentos, DIMS_TAMANO, GROSERIAS, tieneLetras,
 } = require('./util');
-const { requiere, tipoImagen } = require('./seguridad');
+const { requiere } = require('./seguridad');
 const { validarRefugio, guardarRefugio } = require('./auth');
-const fotos = require('./fotos');
 
 const r = express.Router();
 const POR_PAGINA = 24;
 
-const subida = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: fotos.LIMITE, files: 1, fields: 5, fieldSize: 64 * 1024 },
-});
 
 const normalizar = (t) => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/* Centro aproximado de cada alcaldía (para la distancia de refugios sin coordenadas exactas) */
+const CENTRO_ALCALDIA = {
+  'alvaro obregon': [19.3587, -99.2033], azcapotzalco: [19.4869, -99.1844], 'benito juarez': [19.3727, -99.1565],
+  coyoacan: [19.3467, -99.1617], 'cuajimalpa de morelos': [19.3569, -99.2990], cuauhtemoc: [19.4326, -99.1490],
+  'gustavo a. madero': [19.4825, -99.1131], iztacalco: [19.3953, -99.0977], iztapalapa: [19.3550, -99.0622],
+  'la magdalena contreras': [19.3044, -99.2408], 'miguel hidalgo': [19.4280, -99.2050], 'milpa alta': [19.1925, -99.0230],
+  tlahuac: [19.2869, -99.0040], tlalpan: [19.2900, -99.1700], 'venustiano carranza': [19.4300, -99.1000], xochimilco: [19.2570, -99.1030],
+};
 
 /* ---------- Catálogos para las listas de selección ---------- */
 async function catalogos() {
   const filas = await q('SELECT id, catalogo, nombre, orden, activo FROM catalogo_valores ORDER BY catalogo, orden, id');
-  const res = { tamano: [], edad: [], tipo_requisito: [], alcaldia: [], vacuna: [] };
+  const res = { tamano: [], edad: [], tipo_requisito: [], alcaldia: [], vacuna: [], documento: [] };
   filas.forEach((f) => res[f.catalogo].push({ id: f.id, nombre: f.nombre, orden: f.orden, activo: !!f.activo }));
+  // Prefijo de C.P. de cada alcaldía: el formulario la elige sola al escribir el código postal
+  const prefijo = Object.fromEntries(Object.entries(CP_ALCALDIA).map(([k, v]) => [sinAcentos(v), k]));
+  res.alcaldia.forEach((a) => { a.cp = prefijo[sinAcentos(a.nombre)] || null; });
   return res;
 }
-r.get('/catalogos', h(async (req, res) => res.json({ ...(await catalogos()), animal: OPCIONES_ANIMAL })));
+// Dimensiones adultas típicas: el formulario sugiere peso y altura según la raza (o el tamaño en mestizos)
+const DIMS = { razas: Object.fromEntries(RAZAS_LISTA.map((x) => [x.id, { peso: x.peso, altura: x.altura }])), tamano: DIMS_TAMANO };
+r.get('/catalogos', h(async (req, res) => res.json({ ...(await catalogos()), animal: OPCIONES_ANIMAL, dims: DIMS })));
 
 /* ---------- Catálogo público (RNF-01) ---------- */
 const SELECT_TARJETA = `
-  SELECT a.id, a.nombre, a.raza, a.raza_aprox, a.foto, a.estado, e.nombre AS edad, t.nombre AS tamano,
+  SELECT a.id, a.nombre, a.raza, a.raza_aprox, a.estado, e.nombre AS edad, t.nombre AS tamano,
          a.temperamento, u.nombre AS refugio, al.nombre AS alcaldia
     FROM animales a
     JOIN usuarios u ON u.id = a.refugio_id
@@ -71,7 +79,7 @@ async function horario(refugioId, conn) {
 
 /* ---------- Refugios públicos: búsqueda y perfil (sin correos, RNF-03) ---------- */
 const SELECT_REFUGIO = `
-  SELECT u.id, u.nombre, rf.institucion, al.nombre AS alcaldia,
+  SELECT u.id, u.nombre, rf.institucion, al.nombre AS alcaldia, rf.lat, rf.lng,
          (SELECT COUNT(*) FROM animales a WHERE a.refugio_id = u.id AND a.eliminado = 0 AND a.estado = 'disponible') AS disponibles,
          (SELECT COUNT(*) FROM animales a WHERE a.refugio_id = u.id AND a.eliminado = 0 AND a.estado = 'adoptado') AS adoptados
     FROM usuarios u JOIN refugios rf ON rf.usuario_id = u.id LEFT JOIN catalogo_valores al ON al.id = rf.alcaldia_id
@@ -87,7 +95,14 @@ r.get('/refugios', h(async (req, res) => {
     params.push(t, t, t);
   }
   const lista = await q(`${SELECT_REFUGIO}${filtro} ORDER BY disponibles DESC, u.nombre LIMIT 60`, params);
-  res.json(lista.map((x) => ({ ...x, disponibles: Number(x.disponibles), adoptados: Number(x.adoptados) })));
+  // Para ordenar por cercanía: coordenadas exactas o, si el refugio no las tiene, el centro aproximado de su alcaldía
+  res.json(lista.map((x) => {
+    const c = x.lat == null && x.alcaldia ? CENTRO_ALCALDIA[sinAcentos(x.alcaldia)] : null;
+    return {
+      ...x, disponibles: Number(x.disponibles), adoptados: Number(x.adoptados),
+      lat: c ? c[0] : x.lat == null ? null : Number(x.lat), lng: c ? c[1] : x.lng == null ? null : Number(x.lng), aprox: !!c,
+    };
+  }));
 }));
 
 r.get('/refugios/:id', h(async (req, res) => {
@@ -109,9 +124,9 @@ r.get('/refugios/:id', h(async (req, res) => {
 r.get('/animales/:id', h(async (req, res) => {
   const id = V.id(req.params.id);
   const a = await uno(
-    `SELECT a.id, a.refugio_id, a.nombre, a.raza, a.raza_aprox, a.foto, a.estado, a.eliminado, a.salud, a.temperamento,
+    `SELECT a.id, a.refugio_id, a.nombre, a.raza, a.raza_aprox, a.estado, a.eliminado, a.salud, a.temperamento,
             a.salud_general, a.tratamiento, a.temp_general, a.temp_perros, a.temp_desconocidos, a.temp_comida,
-            a.fecha_ingreso, a.esterilizado, a.fecha_esterilizacion, a.publicado_en, a.adoptado_en,
+            a.fecha_ingreso, a.esterilizado, a.fecha_esterilizacion, a.publicado_en, a.adoptado_en, a.peso_kg, a.altura_cm,
             e.nombre AS edad, t.nombre AS tamano, u.nombre AS refugio, u.estado AS refugio_estado,
             rf.institucion, rf.direccion, rf.telefono, rf.lat, rf.lng, rf.place_id, al.nombre AS alcaldia
        FROM animales a
@@ -145,14 +160,13 @@ async function validarAnimal(d, actual = {}, refugioId = null, animalId = null) 
   const t = hoy();
   const fechaPasada = (f) => { if (!esFecha(f) || f > t) falla('La fecha debe ser igual o anterior a la fecha de hoy.'); return f; };
 
-  const nombre = limpiar(d.nombre).replace(/\s+/g, ' ');
-  if ([...nombre].length < 2 || [...nombre].length > 50) falla('El nombre del animal debe tener de 2 a 50 caracteres.');
-  if (!tieneLetras(nombre)) falla('El nombre del animal debe incluir letras.');
+  const nombre = V.nombrePerro(d.nombre);
   const raza = V.raza(d.raza);
   const razaAprox = raza === 'mestizo' ? V.razaAprox(d.raza_aprox) : null;
   const edadId = Number(d.edad_id);
   if (!usable(cat.edad, edadId, actual.edad_id)) falla('Seleccione la edad del animal.');
-  const tamanoId = Number(d.tamano_id);
+  // Raza pura: el tamaño se asigna solo según la raza. Mestizo: lo elige el refugio.
+  const tamanoId = tamanoDeRaza(raza, cat.tamano) || Number(d.tamano_id);
   if (!usable(cat.tamano, tamanoId, actual.tamano_id)) falla('Seleccione el tamaño del animal.');
   // Salud y temperamento: solo se aceptan las opciones cerradas definidas en util.js
   const cerrados = {};
@@ -162,6 +176,7 @@ async function validarAnimal(d, actual = {}, refugioId = null, animalId = null) 
     cerrados[c] = v;
   }
   const fechaIngreso = fechaPasada(d.fecha_ingreso);
+  const dims = V.dimensiones(d, raza, (cat.tamano.find((x) => x.id === tamanoId) || {}).nombre, (cat.edad.find((x) => x.id === edadId) || {}).nombre);
 
   // Coherencia de fechas: ninguna antes del año 2000 ni antes del nacimiento estimado por la edad
   const edadNombre = (cat.edad.find((x) => x.id === edadId) || {}).nombre;
@@ -175,14 +190,25 @@ async function validarAnimal(d, actual = {}, refugioId = null, animalId = null) 
   const reqs = Array.isArray(d.requisitos) ? d.requisitos : [];
   const vacs = Array.isArray(d.vacunas) ? d.vacunas : [];
   if (reqs.length > 10 || vacs.length > 10) falla('Solo se permiten hasta 10 requisitos o hasta 10 vacunas.');
+  /* Requisitos: documentos de la lista cerrada (catálogo "documento") y hasta 3 "Otro" escritos por el refugio */
   const tiposActuales = actual.tipos || [];
+  const docsPermitidos = new Set([...cat.documento.filter((x) => x.activo).map((x) => x.nombre), ...(actual.documentos || [])]);
+  const tipoDoc = (cat.tipo_requisito.find((x) => sinAcentos(x.nombre) === 'documental') || {}).id;
+  let otros = 0;
   const requisitos = reqs.map((x) => {
-    const n = limpiar(x && x.nombre);
-    const tipo = Number(x && x.tipo_id);
-    if ([...n].length < 3 || [...n].length > 100 || !usable(cat.tipo_requisito, tipo, tiposActuales.includes(tipo) ? tipo : -1)) {
-      falla('Cada requisito debe tener de 3 a 100 caracteres y un tipo Texto o Documental.');
+    const n = limpiar(x && x.nombre).replace(/\s+/g, ' ');
+    if (!(x && x.otro)) {
+      if (!docsPermitidos.has(n)) falla('Seleccione los documentos de la lista o use "Otro requisito".');
+      return { nombre: n, tipo_id: tipoDoc, otro: 0 };
     }
-    return { nombre: n, tipo_id: tipo };
+    otros += 1;
+    if (otros > 3) falla('Puede agregar hasta 3 requisitos en "Otro".');
+    const tipo = Number(x.tipo_id);
+    if ([...n].length < 3 || [...n].length > 100 || !tieneLetras(n, 3) || !usable(cat.tipo_requisito, tipo, tiposActuales.includes(tipo) ? tipo : -1)) {
+      falla('Cada requisito "Otro" debe tener de 3 a 100 caracteres, con letras, y un tipo Texto o Documental.');
+    }
+    if (sinAcentos(n).split(/[^a-z]+/).some((p) => GROSERIAS.has(p))) falla('Un requisito contiene palabras no permitidas.');
+    return { nombre: n, tipo_id: tipo, otro: 1 };
   });
   const nombresReq = requisitos.map((x) => x.nombre.toLowerCase());
   if (new Set(nombresReq).size !== nombresReq.length) falla('Hay requisitos repetidos. Cada requisito debe aparecer una sola vez.');
@@ -214,27 +240,16 @@ async function validarAnimal(d, actual = {}, refugioId = null, animalId = null) 
     if (dup) falla(`Ya tienes publicado a un perro disponible llamado ${nombre} con la misma raza. Edita esa publicación en lugar de crear otra.`, 409);
   }
   return {
-    nombre, raza, razaAprox, edadId, tamanoId, cerrados, fechaIngreso, requisitos, vacunas, esterilizado, fechaEst,
+    nombre, raza, razaAprox, edadId, tamanoId, cerrados, fechaIngreso, requisitos, vacunas, esterilizado, fechaEst, dims,
   };
 }
 
-/* Guarda la foto con un nombre aleatorio tras comprobar su firma binaria */
-async function guardarFoto(archivo) {
-  if (!archivo) return null;
-  const ext = tipoImagen(archivo.buffer);
-  if (!ext) falla('La foto debe ser PNG, JPG o WebP de máximo 4 MB.');
-  return fotos.guardar(archivo.buffer, ext);
-}
-const borrarFoto = (nombre) => fotos.borrar(nombre);
-
-const leerDatos = (req) => {
-  try { return JSON.parse(req.body.datos || '{}'); } catch { return falla('Solicitud inválida.'); }
-};
+const leerDatos = (req) => (req.body && typeof req.body === 'object' ? req.body : falla('Solicitud inválida.'));
 
 async function guardarDetalle(c, id, v) {
   await q('DELETE FROM requisitos WHERE animal_id = ?', [id], c);
   await q('DELETE FROM vacunas WHERE animal_id = ?', [id], c);
-  for (const x of v.requisitos) await q('INSERT INTO requisitos (animal_id, nombre, tipo_id) VALUES (?, ?, ?)', [id, x.nombre, x.tipo_id], c);
+  for (const x of v.requisitos) await q('INSERT INTO requisitos (animal_id, nombre, tipo_id, otro) VALUES (?, ?, ?, ?)', [id, x.nombre, x.tipo_id, x.otro], c);
   for (const x of v.vacunas) await q('INSERT INTO vacunas (animal_id, nombre, fecha) VALUES (?, ?, ?)', [id, x.nombre, x.fecha], c);
 }
 
@@ -255,63 +270,51 @@ r.get('/refugio/animales', soloRefugio, h(async (req, res) => {
 r.get('/refugio/animales/:id', soloRefugio, h(async (req, res) => {
   const a = await propio(req, V.id(req.params.id));
   if (req.query.editar === '1' && a.estado === 'adoptado') falla('Una publicación adoptada no es editable.', 409);
-  a.requisitos = await q('SELECT nombre, tipo_id FROM requisitos WHERE animal_id = ? ORDER BY id', [a.id]);
+  a.requisitos = await q('SELECT nombre, tipo_id, otro FROM requisitos WHERE animal_id = ? ORDER BY id', [a.id]);
   a.vacunas = await q('SELECT nombre, fecha FROM vacunas WHERE animal_id = ? ORDER BY id', [a.id]);
   res.json(a);
 }));
 
 /* RF-12: publicar */
-r.post('/refugio/animales', soloRefugio, subida.single('foto'), h(async (req, res) => {
+r.post('/refugio/animales', soloRefugio, h(async (req, res) => {
   const v = await validarAnimal(leerDatos(req), {}, req.usuario.id);
-  const foto = await guardarFoto(req.file);
   const t = ahora();
-  try {
-    const id = await tx(async (c) => {
+  const id = await tx(async (c) => {
       const ins = await q(
         `INSERT INTO animales (refugio_id, nombre, raza, raza_aprox, edad_id, tamano_id,
                                salud_general, tratamiento, temp_general, temp_perros, temp_desconocidos, temp_comida, fecha_ingreso,
-                               esterilizado, fecha_esterilizacion, foto, publicado_en, actualizado_en)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                               esterilizado, fecha_esterilizacion, peso_kg, altura_cm, publicado_en, actualizado_en)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [req.usuario.id, v.nombre, v.raza, v.razaAprox, v.edadId, v.tamanoId, ...CAMPOS_ANIMAL.map((c) => v.cerrados[c]), v.fechaIngreso,
-          v.esterilizado, v.fechaEst, foto, t, t], c);
+          v.esterilizado, v.fechaEst, v.dims.peso, v.dims.altura, t, t], c);
       await guardarDetalle(c, ins.insertId, v);
       return ins.insertId;
-    });
-    res.status(201).json({ id, mensaje: 'Publicación creada con estado Disponible.' });
-  } catch (e) {
-    borrarFoto(foto);
-    throw e;
-  }
+  });
+  res.status(201).json({ id, mensaje: 'Publicación creada con estado Disponible.' });
 }));
 
 /* RF-13: editar */
-r.put('/refugio/animales/:id', soloRefugio, subida.single('foto'), h(async (req, res) => {
+r.put('/refugio/animales/:id', soloRefugio, h(async (req, res) => {
   const id = V.id(req.params.id);
   const actual = await propio(req, id);
   if (actual.estado === 'adoptado') falla('Una publicación adoptada no es editable.', 409);
-  const tipos = (await q('SELECT tipo_id FROM requisitos WHERE animal_id = ?', [id])).map((x) => x.tipo_id);
+  const reqActuales = await q('SELECT nombre, tipo_id, otro FROM requisitos WHERE animal_id = ?', [id]);
+  const tipos = reqActuales.map((x) => x.tipo_id);
+  const documentos = reqActuales.filter((x) => !x.otro).map((x) => x.nombre); // documentos ya elegidos aunque se hayan desactivado
   const vacunasActuales = (await q('SELECT nombre FROM vacunas WHERE animal_id = ?', [id])).map((x) => x.nombre);
   const datos = leerDatos(req);
-  const v = await validarAnimal(datos, { edad_id: actual.edad_id, tamano_id: actual.tamano_id, tipos, vacunas: vacunasActuales }, req.usuario.id, id);
-  const foto = await guardarFoto(req.file);
-  const quitarFoto = datos.quitar_foto === true;
-  try {
-    await tx(async (c) => {
+  const v = await validarAnimal(datos, { edad_id: actual.edad_id, tamano_id: actual.tamano_id, tipos, documentos, vacunas: vacunasActuales }, req.usuario.id, id);
+  await tx(async (c) => {
       const a = await propio(req, id, c, true);
       if (a.estado === 'adoptado') falla('Una publicación adoptada no es editable.', 409);
       await q(
         `UPDATE animales SET nombre = ?, raza = ?, raza_aprox = ?, edad_id = ?, tamano_id = ?,
                 salud_general = ?, tratamiento = ?, temp_general = ?, temp_perros = ?, temp_desconocidos = ?, temp_comida = ?,
-                fecha_ingreso = ?, esterilizado = ?, fecha_esterilizacion = ?, foto = ?, actualizado_en = ? WHERE id = ?`,
+                fecha_ingreso = ?, esterilizado = ?, fecha_esterilizacion = ?, peso_kg = ?, altura_cm = ?, actualizado_en = ? WHERE id = ?`,
         [v.nombre, v.raza, v.razaAprox, v.edadId, v.tamanoId, ...CAMPOS_ANIMAL.map((c) => v.cerrados[c]), v.fechaIngreso, v.esterilizado, v.fechaEst,
-          foto || (quitarFoto ? null : a.foto), ahora(), id], c);
+          v.dims.peso, v.dims.altura, ahora(), id], c);
       await guardarDetalle(c, id, v);
-    });
-  } catch (e) {
-    borrarFoto(foto);
-    throw e;
-  }
-  if (foto || quitarFoto) borrarFoto(actual.foto);
+  });
   res.json({ mensaje: 'Cambios guardados.' });
 }));
 
@@ -386,7 +389,8 @@ r.post('/refugio/animales/:id/estado', soloRefugio, h(async (req, res) => {
 /* ---------- RF-11: perfil del Refugio ---------- */
 r.get('/refugio/perfil', soloRefugio, h(async (req, res) => {
   const p = await uno(
-    `SELECT u.nombre, u.correo, rf.institucion, rf.direccion, rf.telefono, rf.alcaldia_id, rf.lat, rf.lng, rf.place_id
+    `SELECT u.nombre, u.correo, rf.institucion, rf.direccion, rf.calle, rf.num_ext, rf.num_int, rf.colonia, rf.cp,
+            rf.telefono, rf.alcaldia_id, rf.lat, rf.lng, rf.place_id
        FROM usuarios u JOIN refugios rf ON rf.usuario_id = u.id WHERE u.id = ?`, [req.usuario.id]);
   p.horario = await horario(req.usuario.id);
   res.json(p);
@@ -394,7 +398,6 @@ r.get('/refugio/perfil', soloRefugio, h(async (req, res) => {
 
 r.put('/refugio/perfil', soloRefugio, h(async (req, res) => {
   const b = req.body || {};
-  if (!b.alcaldia_id) falla('Seleccione una alcaldía de la lista.');
   const actual = await uno('SELECT institucion FROM refugios WHERE usuario_id = ?', [req.usuario.id]);
   const d = await validarRefugio({ ...b, institucion: actual.institucion });
   await tx((c) => guardarRefugio(c, req.usuario.id, d, false));
@@ -409,4 +412,4 @@ r.get('/refugio/estadisticas', soloRefugio, h(async (req, res) => {
   res.json({ ...p, ingresos: Number(ing.n), adopciones: Number(ado.n) });
 }));
 
-module.exports = { router: r, cerrarPendientes, marcarAdopcion, horario, borrarFoto };
+module.exports = { router: r, cerrarPendientes, marcarAdopcion, horario };

@@ -77,27 +77,49 @@ async function migrar(q) {
   const cambios = [];
 
   const colsR = await columnas('refugios');
-  for (const [c, tipo] of [['lat', 'DECIMAL(9,6) NULL'], ['lng', 'DECIMAL(9,6) NULL'], ['place_id', 'VARCHAR(300) NULL']]) {
+  for (const [c, tipo] of [['lat', 'DECIMAL(9,6) NULL'], ['lng', 'DECIMAL(9,6) NULL'], ['place_id', 'VARCHAR(300) NULL'],
+    ['calle', 'VARCHAR(100) NULL'], ['num_ext', 'VARCHAR(10) NULL'], ['num_int', 'VARCHAR(10) NULL'], ['colonia', 'VARCHAR(80) NULL'], ['cp', 'CHAR(5) NULL']]) {
     if (!colsR.has(c)) { await q(`ALTER TABLE refugios ADD COLUMN ${c} ${tipo}`); cambios.push(`refugios.${c}`); }
   }
   const tipoCat = await q("SELECT COLUMN_TYPE AS t FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'catalogo_valores' AND COLUMN_NAME = 'catalogo'");
-  if (tipoCat[0] && !String(tipoCat[0].t).includes("'vacuna'")) {
-    await q("ALTER TABLE catalogo_valores MODIFY catalogo ENUM('tamano','edad','tipo_requisito','alcaldia','vacuna') NOT NULL");
-    cambios.push('catálogo de vacunas');
+  if (tipoCat[0] && !String(tipoCat[0].t).includes("'documento'")) {
+    await q("ALTER TABLE catalogo_valores MODIFY catalogo ENUM('tamano','edad','tipo_requisito','alcaldia','vacuna','documento') NOT NULL");
+    cambios.push('catálogos de vacunas y documentos');
+  }
+  if (!(await q("SELECT id FROM catalogo_valores WHERE catalogo = 'documento' LIMIT 1")).length) {
+    const docs = ['Identificación oficial vigente (INE o pasaporte)', 'Comprobante de domicilio reciente', 'CURP', 'Comprobante de ingresos', 'Carta responsiva de adopción firmada', 'Fotografías del espacio donde vivirá', 'Dos referencias personales con teléfono', 'Permiso del arrendador (si rentas)', 'Aceptación de todos los que viven en el hogar'];
+    for (const [i, v] of docs.entries()) await q("INSERT IGNORE INTO catalogo_valores (catalogo, nombre, orden) VALUES ('documento', ?, ?)", [v, i + 1]);
+  }
+  const colsU = await columnas('usuarios');
+  if (!colsU.has('telefono')) { await q('ALTER TABLE usuarios ADD COLUMN telefono CHAR(10) NULL'); cambios.push('usuarios.telefono'); }
+  const colsReq = await columnas('requisitos');
+  if (!colsReq.has('otro')) {
+    await q('ALTER TABLE requisitos ADD COLUMN otro TINYINT(1) NOT NULL DEFAULT 0');
+    // Los requisitos escritos a mano antes de la lista cerrada quedan como "Otro"
+    await q("UPDATE requisitos SET otro = 1 WHERE nombre NOT IN (SELECT nombre FROM catalogo_valores WHERE catalogo = 'documento')");
+    cambios.push('requisitos.otro');
   }
   if (!(await q("SELECT id FROM catalogo_valores WHERE catalogo = 'vacuna' LIMIT 1")).length) {
     const iniciales = ['Antirrábica', 'Parvovirus', 'Moquillo', 'Hepatitis canina', 'Leptospirosis', 'Parainfluenza', 'Bordetella (tos de las perreras)', 'Coronavirus canino', 'Múltiple (quíntuple o séxtuple)'];
     for (const [i, v] of iniciales.entries()) await q("INSERT IGNORE INTO catalogo_valores (catalogo, nombre, orden) VALUES ('vacuna', ?, ?)", [v, i + 1]);
   }
-  const tablaFotos = await q("SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'fotos'");
-  if (!Number(tablaFotos[0].n)) {
-    await q('CREATE TABLE fotos (nombre CHAR(37) PRIMARY KEY, tipo VARCHAR(20) NOT NULL, datos MEDIUMBLOB NOT NULL, creada_en DATETIME NOT NULL) ENGINE=InnoDB');
-    cambios.push('tabla fotos');
-  }
+  const colsS = await columnas('solicitudes');
+  if (!colsS.has('mensaje')) { await q('ALTER TABLE solicitudes ADD COLUMN mensaje VARCHAR(500) NULL AFTER motivo_rechazo'); cambios.push('solicitudes.mensaje'); }
+  if (!colsS.has('nota_refugio')) { await q('ALTER TABLE solicitudes ADD COLUMN nota_refugio VARCHAR(200) NULL, ADD COLUMN nota_en DATETIME NULL'); cambios.push('solicitudes.nota_refugio'); }
   const colsA = await columnas('animales');
+  if (!colsA.has('peso_kg')) { await q('ALTER TABLE animales ADD COLUMN peso_kg DECIMAL(4,1) NULL, ADD COLUMN altura_cm SMALLINT UNSIGNED NULL'); cambios.push('animales.peso_kg/altura_cm'); }
   for (const c of ['salud_general', 'tratamiento', 'temp_general', 'temp_perros', 'temp_desconocidos', 'temp_comida']) {
     if (!colsA.has(c)) { await q(`ALTER TABLE animales ADD COLUMN ${c} VARCHAR(20) NULL`); cambios.push(`animales.${c}`); }
   }
+  // Razas puras con un tamaño distinto al de su raza (publicadas antes de la asignación automática)
+  const { RAZAS_LISTA, tamanoDeRaza } = require('./util');
+  const catTamano = (await q("SELECT id, nombre, activo FROM catalogo_valores WHERE catalogo = 'tamano'")).map((x) => ({ ...x, activo: !!x.activo }));
+  let corregidos = 0;
+  for (const r of RAZAS_LISTA) {
+    const t = tamanoDeRaza(r.id, catTamano);
+    if (t) corregidos += (await q('UPDATE animales SET tamano_id = ? WHERE raza = ? AND tamano_id <> ?', [t, r.id, t])).affectedRows;
+  }
+  if (corregidos) cambios.push(`tamaño corregido en ${corregidos} publicación(es) según su raza`);
   if (cambios.length) console.log(verde(`[✓] Base de datos actualizada: ${cambios.join(', ')}`));
 }
 

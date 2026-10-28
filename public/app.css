@@ -1755,32 +1755,6 @@ select.campo__entrada {
   color: var(--color-texto);
 }
 
-/* Zona para subir una foto */
-.subida {
-  display: grid;
-  place-items: center;
-  gap: 6px;
-  padding: 28px 16px;
-  border: 2px dashed var(--color-durazno-oscuro);
-  border-radius: 22px;
-  background: var(--color-durazno);
-  color: var(--color-texto);
-  text-align: center;
-  cursor: pointer;
-  transition: transform 0.2s ease;
-}
-
-.subida:hover {
-  transform: translateY(-2px);
-}
-
-.subida__texto {
-  font-weight: 800;
-}
-
-.subida__ayuda {
-  font-size: 0.85rem;
-}
 
 /* ---------- Campos de texto: mismo estilo redondeado que las opciones ---------- */
 .campo__entrada {
@@ -1993,8 +1967,6 @@ input[type="date"].campo__entrada, input[type="time"].campo__entrada { padding-r
 
 .opciones-linea { display: flex; flex-wrap: wrap; gap: 10px; }
 
-.foto-vista { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
-.foto-vista img { width: 96px; height: 96px; object-fit: cover; border-radius: 18px; border: 3px solid var(--color-azul); }
 
 /* ---------- Ficha de detalle ---------- */
 .ficha { display: grid; gap: 24px; align-items: start; }
@@ -2110,7 +2082,6 @@ input[type="date"].campo__entrada, input[type="time"].campo__entrada { padding-r
   .ficha__imagen svg { animation: none; }
 }
 
-.subida.arrastrando { transform: scale(1.02); border-style: solid; }
 
 /* Buscador en modo oscuro: siempre fondo claro y texto oscuro para que se lea */
 html[data-theme="oscuro"] .buscador__campo,
@@ -2154,7 +2125,7 @@ html[data-theme="oscuro"] .buscador__icono { color: #2c5c8a !important; }
 .direccion__lista [role="option"]:hover, .direccion__lista [aria-selected="true"] { background: var(--color-azul-suave); }
 .direccion__google { padding: 6px 12px 2px; text-align: right; font-size: 0.72rem; opacity: 0.7; }
 [data-dir-estado] a { color: var(--color-azul-fuerte); font-weight: 800; }
-.campo__entrada[name="direccion"] {
+#buscar-dir.campo__entrada, .campo__entrada[name="calle"] {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f8fc0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z'/%3E%3Ccircle cx='12' cy='9.5' r='2.5'/%3E%3C/svg%3E");
 }
 .campo__entrada[name="institucion"] {
@@ -2199,3 +2170,106 @@ html[data-theme="oscuro"] .buscador__icono { color: #2c5c8a !important; }
 .horario-hoy li.es-hoy { background: var(--color-durazno); }
 .ficha__raza .enlace, .refugio-caja h3 .enlace { text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 560px) { .vacunas { grid-template-columns: 1fr; } .vacuna { grid-template-columns: minmax(0, 1fr) 150px; } }
+
+/* Tamaño asignado automáticamente por la raza */
+.campo__entrada--fijo:disabled { opacity: 1; cursor: not-allowed; background: var(--color-durazno, #fde9dc); color: inherit; font-weight: 600; }
+
+/* Ubicación del refugio por partes (calle, números, colonia, C.P., alcaldía) */
+.ubicacion { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 16px; border: 2px dashed var(--color-azul-suave); border-radius: 22px; }
+.ubicacion > legend { padding: 0 8px; }
+.ubicacion__rejilla { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.ubicacion__rejilla input.campo__entrada:not([name="calle"]) { padding-left: 16px; }
+.ubicacion__calle, .ubicacion__colonia, .ubicacion__rejilla .campo:last-child { grid-column: 1 / -1; }
+@media (min-width: 640px) {
+  .ubicacion__rejilla { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.3fr); }
+  .ubicacion__calle, .ubicacion__colonia { grid-column: 1 / 2; }
+  .ubicacion__rejilla .campo:last-child { grid-column: auto; }
+}
+.opcional { font-weight: 600; opacity: 0.7; }
+
+/* Mensaje del adoptante dentro de una solicitud */
+.mensaje-solicitud { margin: 8px 0 4px; padding: 10px 14px; border-left: 4px solid var(--color-durazno-oscuro); border-radius: 0 14px 14px 0; background: var(--color-durazno); color: var(--color-texto); white-space: pre-line; overflow-wrap: anywhere; }
+.mensaje-solicitud__etiqueta { display: block; margin-bottom: 2px; font-size: 0.78rem; font-weight: 800; opacity: 0.75; }
+
+/* Mostrar u ocultar contraseña */
+.clave { position: relative; display: block; }
+.clave .campo__entrada { padding-right: 52px; }
+.clave__ojo {
+  position: absolute; top: 50%; right: 8px; transform: translateY(-50%);
+  display: grid; place-items: center; width: 36px; height: 36px; padding: 0;
+  border: 0; border-radius: 50%; background: transparent; color: var(--color-azul-texto); cursor: pointer;
+}
+.clave__ojo svg { width: 20px; height: 20px; }
+.clave__ojo:hover, .clave__ojo:focus-visible { background: var(--color-azul-suave); outline: none; }
+.clave__ojo[aria-pressed="true"] { color: var(--color-azul-fuerte); }
+
+/* Silueta del usuario (Mi cuenta) */
+.silueta {
+  --tono-fondo: #d6ecf8; --tono-trazo: #2a74ad;
+  position: relative; display: inline-grid; place-items: center; flex: none;
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--tono-fondo); color: var(--tono-trazo);
+  box-shadow: inset 0 0 0 3px var(--color-superficie), 0 0 0 2px var(--tono-trazo);
+}
+.silueta svg { width: 70%; height: 70%; }
+/* Iniciales en una pastilla sobre la silueta (esquina inferior) */
+.silueta__iniciales {
+  position: absolute; right: -4px; bottom: -2px; min-width: 22px; padding: 2px 6px; border-radius: 999px;
+  background: var(--tono-trazo); color: var(--color-superficie); font-weight: 900; font-size: 0.7rem; line-height: 1.3; letter-spacing: 0.04em;
+  box-shadow: 0 0 0 3px var(--color-superficie);
+}
+.silueta--grande { width: 104px; height: 104px; }
+.silueta--grande .silueta__iniciales { font-size: 0.95rem; padding: 3px 9px; right: -6px; bottom: 0; }
+.silueta--t0 { --tono-fondo: #d6ecf8; --tono-trazo: #2a74ad; }
+.silueta--t1 { --tono-fondo: #ffe3c2; --tono-trazo: #c26a12; }
+.silueta--t2 { --tono-fondo: #dcf2e5; --tono-trazo: #2f7f55; }
+.silueta--t3 { --tono-fondo: #f3dcf2; --tono-trazo: #8e3a8a; }
+.silueta--t4 { --tono-fondo: #fbe3dc; --tono-trazo: #b4462c; }
+.silueta--t5 { --tono-fondo: #e3e2fb; --tono-trazo: #4a43b0; }
+.silueta--t6 { --tono-fondo: #fff2c2; --tono-trazo: #8a6a00; }
+.silueta--t7 { --tono-fondo: #d8f3f3; --tono-trazo: #1f7a7a; }
+:root[data-theme="oscuro"] .silueta { --tono-fondo: #1f3d57; --tono-trazo: #8cc7f0; }
+.perfil-tarjeta { display: flex; align-items: center; gap: 20px; }
+.perfil-tarjeta__datos { min-width: 0; }
+.perfil-tarjeta__nombre { margin: 0; font-size: 1.35rem; font-weight: 900; color: var(--color-azul-fuerte); overflow-wrap: anywhere; }
+.perfil-tarjeta__rol { margin: 2px 0 0; font-weight: 800; color: var(--color-azul-texto); }
+.perfil-tarjeta__meta { margin: 6px 0 0; font-size: 0.88rem; opacity: 0.8; overflow-wrap: anywhere; }
+@media (max-width: 480px) { .perfil-tarjeta { flex-direction: column; text-align: center; } }
+.formulario--linea { margin-top: 18px; padding-top: 18px; border-top: 2px dashed var(--color-azul-suave); }
+
+/* Nota del refugio (distinta del mensaje del adoptante) */
+.mensaje-solicitud--refugio { border-left-color: var(--color-azul-fuerte); background: var(--color-azul-suave); }
+
+/* Tabla de la cita */
+.tabla-cita { width: 100%; margin: 10px 0 4px; border-collapse: separate; border-spacing: 0; border: 2px solid var(--color-azul); border-radius: 16px; overflow: hidden; font-size: 0.92rem; background: var(--color-superficie); }
+.tabla-cita caption { padding: 0 0 6px; text-align: left; font-weight: 900; color: var(--color-azul-fuerte); }
+.tabla-cita th, .tabla-cita td { padding: 8px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--color-azul-suave); }
+.tabla-cita tr:last-child th, .tabla-cita tr:last-child td { border-bottom: 0; }
+.tabla-cita th { width: 34%; background: var(--color-azul-suave); color: var(--color-azul-texto); font-weight: 800; white-space: nowrap; }
+.tabla-cita td { overflow-wrap: anywhere; }
+.tabla-cita__lista { margin: 0; padding-left: 18px; }
+@media (max-width: 420px) { .tabla-cita th { width: 40%; white-space: normal; } }
+
+/* Documentos requeridos (lista cerrada) */
+.documentos { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.documento { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 2px solid var(--color-azul-suave); border-radius: 14px; cursor: pointer; font-weight: 600; transition: border-color 0.2s ease, background 0.2s ease; }
+.documento span { min-width: 0; overflow-wrap: anywhere; }
+.documento input { width: 18px; height: 18px; margin: 2px 0 0; flex: none; accent-color: var(--color-azul-fuerte); }
+.documento:has(input:checked) { border-color: var(--color-azul-fuerte); background: var(--color-azul-suave); }
+.documento:focus-within { outline: 3px solid var(--color-durazno-oscuro); outline-offset: 2px; }
+.campo__entrada--numero { padding-left: 16px; }
+.dims-ayuda { margin-top: -6px; }
+.dims-ayuda .enlace { font-weight: 800; }
+
+/* Ubicación actual */
+.ubicacion__actual { justify-self: start; margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; }
+.ubicacion__actual svg, [data-cercanos] svg { width: 18px; height: 18px; }
+[data-cercanos] { display: inline-flex; align-items: center; gap: 6px; }
+[data-cercanos][aria-pressed="true"] { background: var(--color-azul-fuerte); color: var(--color-blanco); border-color: var(--color-azul-fuerte); }
+.distancia { font-weight: 900; color: var(--color-azul-fuerte); }
+.centrado { text-align: center; }
+
+/* El candado se conserva al mostrar la contraseña; teléfono con su icono */
+.clave .campo__entrada[type="text"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f8fc0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E"); }
+.campo__entrada[type="tel"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f8fc0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='6' y='2' width='12' height='20' rx='3'/%3E%3Cpath d='M11 18h2'/%3E%3C/svg%3E"); }
+.ubicacion__actual { width: fit-content; }

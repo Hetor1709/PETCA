@@ -65,7 +65,7 @@ r.get('/admin/publicaciones', h(async (req, res) => {
   const p = V.pagina(req.query.pagina);
   const total = await uno('SELECT COUNT(*) AS n FROM animales WHERE eliminado = 0');
   const lista = await q(
-    `SELECT a.id, a.nombre, a.raza, a.raza_aprox, a.foto, a.estado, LEFT(a.publicado_en, 16) AS publicado, u.nombre AS refugio
+    `SELECT a.id, a.nombre, a.raza, a.raza_aprox, a.estado, LEFT(a.publicado_en, 16) AS publicado, u.nombre AS refugio
        FROM animales a JOIN usuarios u ON u.id = a.refugio_id
       WHERE a.eliminado = 0 ORDER BY a.publicado_en DESC, a.id DESC ${lim(p)}`);
   res.json({ total: Number(total.n), pagina: p, porPagina: POR_PAGINA, publicaciones: lista });
@@ -132,7 +132,7 @@ r.post('/admin/cuentas/:id/admin', h(async (req, res) => {
 }));
 
 /* ---------- RF-29 a RF-31: catálogos ---------- */
-const EDITABLES = ['tamano', 'edad', 'tipo_requisito', 'vacuna'];
+const EDITABLES = ['tamano', 'edad', 'tipo_requisito', 'vacuna', 'documento'];
 const nombreValor = (v) => {
   const n = limpiar(v).replace(/\s+/g, ' ');
   if (!n || [...n].length > 50) falla('El nombre del valor debe tener de 1 a 50 caracteres.');

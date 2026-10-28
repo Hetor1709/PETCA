@@ -3,7 +3,7 @@
      npm run admin -- correo@x.com "Nombre" Clave123   crea el primer Administrador
      npm run demo                                 carga refugios, animales y un adoptante de prueba
      npm run respaldo                             respaldo diario con rotación (RNF-06)
-     npm run empaquetar                           zip de entrega SIN .env, node_modules, uploads ni archivos antiguos
+     npm run empaquetar                           zip de entrega SIN .env, node_modules ni archivos antiguos
      npm run verificar                            diagnóstico completo: Node, dependencias, .env, MySQL, tablas y archivos */
 const arranque = require('./arranque');
 
@@ -51,21 +51,30 @@ async function demo() {
     return r.insertId;
   };
   const refugios = [
-    ['Patitas Felices', 'refugio1@dopta.demo', 'Av. Universidad 1200, Col. Xoco', '5512345678', 'Benito Juárez'],
-    ['Huellitas del Sur', 'refugio2@dopta.demo', 'Calz. de Tlalpan 3400, Col. Santa Úrsula', '5587654321', 'Coyoacán'],
+    ['Patitas Felices', 'refugio1@dopta.demo', ['Av. Universidad', '1200', null, 'Xoco', '03330'], '5512345678', 'Benito Juárez'],
+    ['Huellitas del Sur', 'refugio2@dopta.demo', ['Calz. de Tlalpan', '3400', null, 'Santa Úrsula Coapa', '04650'], '5587654321', 'Coyoacán'],
   ];
   const ids = [];
-  for (const [n, m, d, tel, alc] of refugios) {
+  for (const [n, m, [calle, ext, int, col, cp], tel, alc] of refugios) {
     const rid = await usuario('refugio', n, m);
     ids.push(rid);
-    await c.execute('INSERT IGNORE INTO refugios (usuario_id, institucion, direccion, telefono, alcaldia_id) VALUES (?, ?, ?, ?, ?)',
-      [rid, `Asociación ${n} A.C.`, d, tel, await id('alcaldia', alc)]);
+    await c.execute(`INSERT IGNORE INTO refugios (usuario_id, institucion, direccion, calle, num_ext, num_int, colonia, cp, telefono, alcaldia_id)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [rid, `Asociación ${n} A.C.`, `${calle} ${ext}, Col. ${col}, C.P. ${cp}`, calle, ext, int, col, cp, tel, await id('alcaldia', alc)]);
     for (let dia = 0; dia < 7; dia++) {
       await c.execute('INSERT IGNORE INTO refugio_horarios (refugio_id, dia, cerrado, abre, cierra) VALUES (?, ?, ?, ?, ?)',
         [rid, dia, dia === 6 ? 1 : 0, dia === 6 ? null : '10:00', dia === 6 ? null : (dia === 5 ? '14:00' : '18:00')]);
     }
   }
-  await usuario('adoptante', 'Ana López', 'adoptante@dopta.demo');
+  const ana = await usuario('adoptante', 'Ana López', 'adoptante@dopta.demo');
+  await c.execute("UPDATE usuarios SET telefono = '5598765432' WHERE id = ? AND telefono IS NULL", [ana]);
+  // Peso y altura de ejemplo: el punto medio del rango de su raza (o tamaño), menor en cachorros
+  const { RAZAS_LISTA, DIMS_TAMANO, sinAcentos } = require('./util');
+  const dims = (raza, tam, edad) => {
+    const r = RAZAS_LISTA.find((x) => x.id === raza) || DIMS_TAMANO[sinAcentos(tam)];
+    const f = /mes/.test(edad) ? Math.max(0.3, Number.parseInt(edad, 10) / 12) : 1;
+    return [Math.round(((r.peso[0] + r.peso[1]) / 2) * f * 10) / 10, Math.round(((r.altura[0] + r.altura[1]) / 2) * (0.5 + 0.5 * f))];
+  };
   const animales = [
     ['Luna', 'labrador', null, '2 años', 'Grande', 'Juguetona y muy cariñosa con niños.'],
     ['Pancho', 'chihuahua', null, '5 años', 'Pequeño', 'Tranquilo, ideal para departamento.'],
@@ -88,15 +97,16 @@ async function demo() {
       const [r] = await c.execute(
         `INSERT INTO animales (refugio_id, nombre, raza, raza_aprox, edad_id, tamano_id, salud_general, tratamiento,
                                temp_general, temp_perros, temp_desconocidos, temp_comida, fecha_ingreso,
-                               esterilizado, fecha_esterilizacion, publicado_en, actualizado_en)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                               esterilizado, fecha_esterilizacion, peso_kg, altura_cm, publicado_en, actualizado_en)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [ids[i % 2], n, raza, aprox, await id('edad', edad), await id('tamano', tam),
           ['excelente', 'bueno', 'bueno', 'regular'][i % 4], ['no', 'no', 'dieta', 'no', 'medicamento'][i % 5],
           ['jugueton', 'tranquilo', 'activo', 'tranquilo', 'nervioso'][i % 5], ['sociable', 'selectivo', 'sociable', 'unico'][i % 4],
           ['amigable', 'timido', 'amigable', 'desconfiado'][i % 4], ['tranquilo', 'rapido', 'tranquilo', 'protege'][i % 4],
-          sumarDias(hoy(), -(i * 3 + 2)), i % 3 ? 1 : 0, i % 3 ? sumarDias(hoy(), -(i * 3)) : null, t, t]);
-      await c.execute('INSERT INTO requisitos (animal_id, nombre, tipo_id) VALUES (?, ?, ?), (?, ?, ?)',
-        [r.insertId, 'Nombre completo y teléfono', texto, r.insertId, 'Copia de identificación oficial', doc]);
+          sumarDias(hoy(), -(i * 3 + 2)), i % 3 ? 1 : 0, i % 3 ? sumarDias(hoy(), -(i * 3)) : null, ...dims(raza, tam, edad), t, t]);
+      await c.execute('INSERT INTO requisitos (animal_id, nombre, tipo_id, otro) VALUES (?, ?, ?, 0), (?, ?, ?, 0), (?, ?, ?, 1)',
+        [r.insertId, 'Identificación oficial vigente (INE o pasaporte)', doc, r.insertId, 'Comprobante de domicilio reciente', doc,
+          r.insertId, 'Nombre completo y teléfono', texto]);
       await c.execute('INSERT INTO vacunas (animal_id, nombre, fecha) VALUES (?, ?, ?)', [r.insertId, 'Antirrábica', sumarDias(hoy(), -(i * 3 + 1))]);
     }
   }
@@ -132,8 +142,8 @@ function respaldo() {
 }
 
 /* Zip de entrega con lista blanca: solo entra lo necesario para instalar el proyecto.
-   Nunca incluye .env (contraseñas), node_modules, uploads (fotos de usuarios), respaldos ni la versión antigua. */
-const ENTREGA = ['public', 'server', 'database', 'package.json', 'package-lock.json', '.env.example', '.gitignore', 'README.md', 'iniciar.bat', 'iniciar.sh', 'server.js', 'vercel.json', 'DEPLOY.md'];
+   Nunca incluye .env (contraseñas), node_modules, respaldos ni la versión antigua. */
+const ENTREGA = ['public', 'server', 'database', 'package.json', 'package-lock.json', '.env.example', '.gitignore', 'README.md', 'server.js', 'vercel.json'];
 function empaquetar() {
   const n = arranque.generarManifiesto(); // huella de cada archivo para detectar copias desactualizadas
   console.log(`Manifiesto actualizado (${n} archivos, versión ${arranque.VERSION}).`);
@@ -153,7 +163,7 @@ function empaquetar() {
       if (code !== 0) return mal(new Error(`${prog} terminó con código ${code}`));
       console.log(`Entrega lista: entrega${path.sep}${nombre}`);
       console.log(`Incluye: ${items.join(', ')}`);
-      console.log('No incluye: .env, node_modules, uploads, respaldos ni los HTML/CSS/JS antiguos de la raíz.');
+      console.log('No incluye: .env, node_modules, respaldos ni los HTML/CSS/JS antiguos de la raíz.');
       ok();
     });
   });

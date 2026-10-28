@@ -1,12 +1,10 @@
-/* Dopta · servidor web y API REST. Inicia con:  npm start  (o doble clic en iniciar.bat) */
+/* Dopta · servidor web y API REST. Inicia con:  npm start */
 const arranque = require('./arranque');
 
 arranque.prepararEnv(); // crea .env si falta y carga la configuración antes de conectar a MySQL
 const path = require('path');
 const express = require('express');
-const multer = require('multer');
 const { q, EN_VERCEL } = require('./db');
-const fotos = require('./fotos');
 const { ErrorApp, ahora, haceMin } = require('./util');
 const seg = require('./seguridad');
 
@@ -41,19 +39,6 @@ app.use(express.static(PUBLICO, {
   maxAge: seg.PROD ? '7d' : 0,
   setHeaders: (res, ruta) => { if (ruta.endsWith('index.html')) res.set('Cache-Control', 'no-cache'); },
 }));
-/* Fotos de los perros: desde uploads/ en tu computadora o desde la base de datos en Vercel */
-app.get('/fotos/:nombre', async (req, res, next) => {
-  try {
-    const f = await fotos.leer(req.params.nombre);
-    if (!f) return res.status(404).type('text').send('No encontrado');
-    res.set({
-      'Content-Type': f.tipo,
-      'Cache-Control': 'public, max-age=2592000, immutable', // el nombre es aleatorio: si cambia la foto, cambia el nombre
-      'Content-Security-Policy': "default-src 'none'; img-src 'self'; sandbox",
-    });
-    res.send(f.datos);
-  } catch (e) { next(e); }
-});
 
 /* ---------- Estado de la base de datos ----------
    Mientras MySQL no esté disponible la API responde 503 con la causa exacta (nunca un 500 genérico). */
@@ -136,9 +121,6 @@ app.use((req, res) => {
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   if (err instanceof ErrorApp) return res.status(err.status).json({ error: err.message, ...(err.extra || {}) });
-  if (err instanceof multer.MulterError) {
-    return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'La foto debe ser PNG, JPG o WebP de máximo 4 MB (el navegador la optimiza al subirla).' : 'Archivo no permitido.' });
-  }
   if (err.status === 404 || err.statusCode === 404) return res.status(404).type('text').send('No encontrado');
   if (err.type === 'entity.parse.failed' || err.type === 'entity.too.large') return res.status(400).json({ error: 'Solicitud inválida.' });
   if (ERRORES_CONEXION.includes(err.code)) {
@@ -164,7 +146,9 @@ async function mantenimiento() {
     const bajas = await q("SELECT id, tipo FROM usuarios WHERE estado = 'baja' AND purgado = 0 AND purgar_en <= ?", [ahora()]);
     for (const u of bajas) {
       await q("UPDATE usuarios SET nombre = 'Cuenta dada de baja', correo = ?, hash = '!', purgado = 1 WHERE id = ?", [`baja-${u.id}@dopta.invalid`, u.id]);
-      if (u.tipo === 'refugio') await q("UPDATE refugios SET institucion = 'Datos eliminados', direccion = 'Datos eliminados', telefono = '0000000000', lat = NULL, lng = NULL, place_id = NULL WHERE usuario_id = ?", [u.id]);
+      if (u.tipo === 'refugio') await q("UPDATE refugios SET institucion = 'Datos eliminados', direccion = 'Datos eliminados', calle = NULL, num_ext = NULL, num_int = NULL, colonia = NULL, cp = NULL, telefono = '0000000000', lat = NULL, lng = NULL, place_id = NULL WHERE usuario_id = ?", [u.id]);
+      await q('UPDATE usuarios SET telefono = NULL WHERE id = ?', [u.id]);
+      await q('UPDATE solicitudes SET mensaje = NULL WHERE adoptante_id = ?', [u.id]); // el mensaje es dato personal
       await q('DELETE FROM notificaciones WHERE usuario_id = ?', [u.id]);
     }
   } catch (e) {

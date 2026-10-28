@@ -26,12 +26,12 @@ const vacio = (...v) => v.some((x) => typeof x !== 'string' || !x.trim());
 
 /* Datos institucionales del Refugio (RF-04) */
 async function validarRefugio(b) {
+  const alcaldias = await q("SELECT id, nombre FROM catalogo_valores WHERE catalogo = 'alcaldia' AND activo = 1");
   const datos = {
     institucion: V.nombreRefugio(b.institucion, 'El nombre de la institución debe tener de 3 a 120 caracteres.'),
-    direccion: V.direccion(b.direccion),
+    ...V.ubicacion(b, alcaldias), // calle, num_ext, num_int, colonia, cp, alcaldia_id y la dirección armada
     telefono: V.telefono(b.telefono),
     horario: V.horario(b.horario),
-    alcaldia_id: null,
     // Coordenadas de Google Places (opcionales): solo se aceptan dentro de la CDMX
     lat: null,
     lng: null,
@@ -44,21 +44,18 @@ async function validarRefugio(b) {
     datos.lng = Math.round(lng * 1e6) / 1e6;
     datos.place_id = RE_PLACE.test(String(b.place_id || '')) ? b.place_id : null;
   }
-  if (b.alcaldia_id) {
-    const a = await uno("SELECT id FROM catalogo_valores WHERE id = ? AND catalogo = 'alcaldia' AND activo = 1", [V.id(b.alcaldia_id)]);
-    if (!a) falla('Seleccione una alcaldía de la lista.');
-    datos.alcaldia_id = a.id;
-  }
   return datos;
 }
 
 async function guardarRefugio(conn, id, d, nuevo) {
   if (nuevo) {
-    await q('INSERT INTO refugios (usuario_id, institucion, direccion, telefono, alcaldia_id, lat, lng, place_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, d.institucion, d.direccion, d.telefono, d.alcaldia_id, d.lat, d.lng, d.place_id], conn);
+    await q(`INSERT INTO refugios (usuario_id, institucion, direccion, calle, num_ext, num_int, colonia, cp, telefono, alcaldia_id, lat, lng, place_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, d.institucion, d.direccion, d.calle, d.num_ext, d.num_int, d.colonia, d.cp, d.telefono, d.alcaldia_id, d.lat, d.lng, d.place_id], conn);
   } else {
-    await q('UPDATE refugios SET institucion = ?, direccion = ?, telefono = ?, alcaldia_id = ?, lat = ?, lng = ?, place_id = ? WHERE usuario_id = ?',
-      [d.institucion, d.direccion, d.telefono, d.alcaldia_id, d.lat, d.lng, d.place_id, id], conn);
+    await q(`UPDATE refugios SET institucion = ?, direccion = ?, calle = ?, num_ext = ?, num_int = ?, colonia = ?, cp = ?, telefono = ?,
+               alcaldia_id = ?, lat = ?, lng = ?, place_id = ? WHERE usuario_id = ?`,
+      [d.institucion, d.direccion, d.calle, d.num_ext, d.num_int, d.colonia, d.cp, d.telefono, d.alcaldia_id, d.lat, d.lng, d.place_id, id], conn);
   }
   for (const x of d.horario) {
     await q(`INSERT INTO refugio_horarios (refugio_id, dia, cerrado, abre, cierra) VALUES (?, ?, ?, ?, ?)
@@ -79,6 +76,7 @@ r.post('/auth/registro', limiteRegistro, h(async (req, res) => {
   const pass = V.contrasena(b.contrasena);
   if (typeof b.confirmar === 'string' && b.confirmar !== pass) falla('Las contraseñas no coinciden.');
   const inst = tipo === 'refugio' ? await validarRefugio(b) : null;
+  const telefono = tipo === 'adoptante' ? V.telefono(b.telefono) : null; // el refugio lo usa para contactarlo
 
   if (await uno('SELECT id FROM usuarios WHERE correo = ?', [mail])) falla('El correo electrónico ya está registrado.', 409);
 
@@ -86,9 +84,9 @@ r.post('/auth/registro', limiteRegistro, h(async (req, res) => {
   const t = ahora();
   await tx(async (c) => {
     const ins = await q(
-      `INSERT INTO usuarios (tipo, nombre, correo, hash, estado, aviso_version, aviso_fecha, creado)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [tipo, nombre, mail, hash, tipo === 'refugio' ? 'pendiente' : 'activa', AVISO_VERSION, t.slice(0, 16) + ':00', t], c);
+      `INSERT INTO usuarios (tipo, nombre, correo, telefono, hash, estado, aviso_version, aviso_fecha, creado)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [tipo, nombre, mail, telefono, hash, tipo === 'refugio' ? 'pendiente' : 'activa', AVISO_VERSION, t.slice(0, 16) + ':00', t], c);
     if (inst) await guardarRefugio(c, ins.insertId, inst, true);
   }).catch((e) => {
     if (e.code === 'ER_DUP_ENTRY') falla('El correo electrónico ya está registrado.', 409);
@@ -197,7 +195,7 @@ r.post('/auth/restablecer', limitador({ ventanaMin: 15, max: 20 }), h(async (req
 
 /* ---------- Cuenta (RF-07, RF-09, RF-10) ---------- */
 r.get('/cuenta', requiere(), h(async (req, res) => {
-  const u = await uno('SELECT id, tipo, nombre, correo, creado, aviso_version FROM usuarios WHERE id = ?', [req.usuario.id]);
+  const u = await uno('SELECT id, tipo, nombre, correo, telefono, creado, aviso_version FROM usuarios WHERE id = ?', [req.usuario.id]);
   if (u.tipo === 'refugio') {
     u.refugio = await uno('SELECT institucion FROM refugios WHERE usuario_id = ?', [u.id]);
   }
@@ -218,6 +216,13 @@ r.put('/cuenta/nombre', requiere('adoptante', 'refugio'), h(async (req, res) => 
     await q('UPDATE refugios SET institucion = ? WHERE usuario_id = ?', [i, req.usuario.id]);
   }
   res.json({ mensaje: 'Datos actualizados.' });
+}));
+
+/* Teléfono del adoptante (lo ve solo el refugio con el que tiene una solicitud) */
+r.put('/cuenta/telefono', requiere('adoptante'), h(async (req, res) => {
+  const tel = V.telefono((req.body || {}).telefono);
+  await q('UPDATE usuarios SET telefono = ? WHERE id = ?', [tel, req.usuario.id]);
+  res.json({ mensaje: 'Teléfono actualizado.' });
 }));
 
 r.put('/cuenta/contrasena', requiere(), limitador({ ventanaMin: 15, max: 10 }), h(async (req, res) => {
