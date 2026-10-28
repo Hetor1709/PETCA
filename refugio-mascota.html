@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agregar mascota · Dopta</title>
+  <meta name="robots" content="noindex">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amaranth:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/paginas.css">
+  <script src="js/tema.js"></script>
+  <script src="js/cargando.js" defer></script>
+</head>
+<body>
+
+  <header class="encabezado">
+    <div class="encabezado__contenedor">
+      <a class="logo" href="refugio.html" aria-label="Dopta">
+        <img class="logo__imagen" src="img/logo-dopta.svg" alt="" width="58" height="52">
+        <span class="logo__texto">Dopta</span>
+      </a>
+
+      <nav class="encabezado__nav" aria-label="Principal">
+        <a class="boton-pastilla" href="refugio.html">Inicio</a>
+        <a class="boton-pastilla" href="perfil.html">Perfil</a>
+        <a class="boton-pastilla" href="ajustes.html">Ajustes</a>
+        <a class="boton-pastilla" href="sobre-nosotros.html">Sobre nosotros</a>
+        <a class="boton-pastilla" href="index.html">Cerrar sesión</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="principal principal--cuenta">
+    <a class="boton-contorno boton-contorno--icono" href="refugio.html" aria-label="Regresar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+
+    <section class="panel" aria-labelledby="titulo-agregar">
+      <h1 class="panel__titulo" id="titulo-agregar">Agregar Mascota al Catálogo</h1>
+
+      <form class="formulario formulario--dos" action="refugio.html" method="post" enctype="multipart/form-data">
+        <div class="campo">
+          <label class="campo__etiqueta" for="nombre">Nombre de la mascota</label>
+          <input class="campo__entrada" id="nombre" name="nombre" type="text" placeholder="Ej. Luna" minlength="2" maxlength="50" required>
+        </div>
+
+        <div class="campo">
+          <label class="campo__etiqueta" for="raza">Raza</label>
+          <input class="campo__entrada" id="raza" name="raza" type="text" placeholder="Ej. Poodle">
+        </div>
+
+        <div class="campo">
+          <label class="campo__etiqueta" for="especie">Especie</label>
+          <input class="campo__entrada" id="especie" name="especie" type="text" placeholder="Ej. Perro" required>
+        </div>
+
+        <div class="campo">
+          <label class="campo__etiqueta" for="edad">Edad</label>
+          <input class="campo__entrada" id="edad" name="edad" type="text" placeholder="Ej. 2 años">
+        </div>
+
+        <div class="campo campo--ancho">
+          <label class="campo__etiqueta" for="descripcion">Descripción / especificaciones</label>
+          <textarea class="campo__textarea" id="descripcion" name="descripcion" placeholder="Ej. Temperamento juguetón, pelaje corto, ideal para familias con niños."></textarea>
+        </div>
+
+        <div class="campo campo--ancho">
+          <span class="campo__etiqueta">Foto de la mascota</span>
+          <label class="subida">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></svg>
+            <span class="subida__texto">Arrastra o selecciona una foto</span>
+            <span class="subida__ayuda">PNG o JPG, máximo 5 MB</span>
+            <input class="sr-only" type="file" name="foto" accept="image/png, image/jpeg">
+          </label>
+        </div>
+
+        <div class="panel__acciones campo--ancho">
+          <button class="boton-contorno" type="submit">Publicar Mascota</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <footer class="pie">
+    <p>Dopta · Catálogo digital gratuito de animales en adopción</p>
+  </footer>
+
+  <button class="boton-tema" type="button" data-tema-boton aria-label="Cambiar a modo oscuro">
+    <svg class="boton-tema__luna" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    <svg class="boton-tema__sol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+  </button>
+
+</body>
+</html>
