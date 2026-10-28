@@ -1,0 +1,30 @@
+{
+ "version": "1.2.0",
+ "archivos": {
+  "database/schema.sql": "fd09482d3490fc51",
+  "public/app.css": "c36f6f8ec3d479c5",
+  "public/app.js": "b488f382eacd2feb",
+  "public/img/cargando.svg": "1d3113fa760264e2",
+  "public/img/error-404.svg": "a306c980001aa8d4",
+  "public/img/error-500.svg": "60d9f47c41d022a8",
+  "public/img/hueso.svg": "5a852ad5e83cef7d",
+  "public/img/logo-dopta.svg": "9b690ed692cd4659",
+  "public/index.html": "7cd69a4f7bcdae52",
+  "public/razas.js": "efaf4b355bdc1d1c",
+  "server/admin.js": "2d65a6275b484b75",
+  "server/animales.js": "1e92eb22f679cf3c",
+  "server/arranque.js": "72a49f83051c35e9",
+  "server/auth.js": "7fa37fd6f6b3a801",
+  "server/correo.js": "51cfeb70a2cb426e",
+  "server/db.js": "a72f91864a69f537",
+  "server/fotos.js": "e4f026ca2f8fd386",
+  "server/herramientas.js": "470a5353e2cebb0e",
+  "server/index.js": "eacd4de2eb4eaa03",
+  "server/inicio.js": "09d81af5cd3c02b3",
+  "server/lugares.js": "6c5b705872a74756",
+  "server/razas.json": "cc3f429ab1741129",
+  "server/seguridad.js": "d6aff8ce4babf8b0",
+  "server/solicitudes.js": "16b7f2555c06c2a1",
+  "server/util.js": "e96d847dbb83530b"
+ }
+}
