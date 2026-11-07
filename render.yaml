@@ -1,0 +1,27 @@
+# Blueprint de Render: Dashboard → New → Blueprint → elige este repositorio.
+# La base de datos vive en Supabase (PostgreSQL); pega su cadena del "Session pooler" en DATABASE_URL.
+services:
+  - type: web
+    name: dopta
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/version
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATABASE_URL
+        sync: false          # se captura en el Dashboard (secreta)
+      - key: CRON_SECRET
+        generateValue: true
+      - key: VALIDAR_CORREO_DNS
+        value: "1"
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: GOOGLE_MAPS_EMBED_KEY
+        sync: false

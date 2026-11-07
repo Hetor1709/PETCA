@@ -3,7 +3,7 @@
    Sin key configurada, la dirección se escribe a mano como antes. */
 const express = require('express');
 const { q } = require('./db');
-const { h, falla, limpiar, CP_ALCALDIA, sinAcentos } = require('./util');
+const { h, falla, limpiar, CP_ALCALDIA, sinAcentos, CPS, Filtro } = require('./util');
 const { limitador } = require('./seguridad');
 
 const r = express.Router();
@@ -41,6 +41,51 @@ async function google(ruta, opciones) {
 }
 
 r.get('/lugares/estado', (req, res) => res.json({ activo: !!clave() }));
+
+/* Código postal → alcaldía y colonias (catálogo de Correos de México; no usa Google ni tiene costo) */
+r.get('/lugares/cp/:cp', h(async (req, res) => {
+  const cp = String(req.params.cp || '');
+  if (!/^\d{5}$/.test(cp)) falla('El código postal debe tener exactamente 5 dígitos.');
+  const d = CPS[cp];
+  if (!d) falla(`El código postal ${cp} no existe en la Ciudad de México.`, 404);
+  const alc = await q("SELECT id FROM catalogo_valores WHERE catalogo = 'alcaldia' AND sin_acentos(nombre) = sin_acentos(?)", [d.a]);
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.json({ cp, alcaldia: d.a, alcaldia_id: alc[0] ? alc[0].id : null, colonias: d.c.map(([nombre, tipo]) => ({ nombre, tipo })) });
+}));
+
+/* Calles reales dentro del C.P. y colonia elegidos (Google Places; sin key la calle se escribe a mano) */
+r.post('/lugares/calles', limite, h(async (req, res) => {
+  if (!clave()) return res.json({ calles: [], activo: false });
+  const b = req.body || {};
+  const texto = limpiar(b.texto).slice(0, 80);
+  const d = CPS[String(b.cp || '')];
+  if (!d || [...texto].length < 2) return res.json({ calles: [] });
+  if (!RE_TOKEN.test(String(b.sesion || ''))) falla('Solicitud inválida.');
+  const colonia = limpiar(b.colonia).slice(0, 80);
+  const j = await google('/places:autocomplete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': clave() },
+    body: JSON.stringify({
+      input: `${texto}, ${colonia ? `${colonia}, ` : ''}${d.a}, ${b.cp}`,
+      languageCode: 'es',
+      regionCode: 'mx',
+      includedPrimaryTypes: ['route'],
+      locationRestriction: { rectangle: CDMX },
+      sessionToken: b.sesion,
+    }),
+  });
+  const vistas = new Set();
+  const calles = (j.suggestions || []).map((s) => s.placePrediction).filter(Boolean)
+    .map((p) => ({
+      calle: (p.structuredFormat && p.structuredFormat.mainText && p.structuredFormat.mainText.text) || '',
+      zona: (p.structuredFormat && p.structuredFormat.secondaryText && p.structuredFormat.secondaryText.text) || '',
+    }))
+    // Solo calles de la misma alcaldía (y primero las de la colonia elegida)
+    .filter((x) => x.calle && sinAcentos(x.zona).includes(sinAcentos(d.a).replace(/ de morelos$/, '')) && !vistas.has(sinAcentos(x.calle)) && vistas.add(sinAcentos(x.calle)))
+    .sort((a, b2) => Number(sinAcentos(b2.zona).includes(sinAcentos(colonia))) - Number(sinAcentos(a.zona).includes(sinAcentos(colonia))))
+    .slice(0, 6);
+  res.json({ calles });
+}));
 
 /* Sugerencias mientras se escribe */
 r.post('/lugares/sugerencias', limite, h(async (req, res) => {
@@ -102,12 +147,22 @@ async function atomizar(componentes, formateada) {
   const alc = (porCp && alcaldias.find((a) => sinAcentos(a.nombre) === sinAcentos(porCp)))
     || alcaldias.find((a) => nombres.some((n) => n === norm(a.nombre) || n.includes(clave16(a.nombre))));
 
+  // La colonia se ajusta al nombre oficial de Correos de México para ese C.P. (la más parecida a la de Google)
+  let colonia = comp('neighborhood', 'sublocality_level_2', 'sublocality_level_1', 'sublocality').replace(/^col(onia)?\.?\s+/i, '').slice(0, 80);
+  if (cp && CPS[cp]) {
+    const g = sinAcentos(colonia);
+    const lista = CPS[cp].c.map(([n]) => n);
+    colonia = lista.find((n) => sinAcentos(n) === g)
+      || lista.find((n) => g && (sinAcentos(n).includes(g) || g.includes(sinAcentos(n))))
+      || lista.slice().sort((a, b) => Filtro.distancia(sinAcentos(a), g) - Filtro.distancia(sinAcentos(b), g))[0];
+    if (lista.length === 1) colonia = lista[0];
+  }
   return {
     direccion,
     calle: comp('route').slice(0, 100),
     num_ext: comp('street_number').toUpperCase().slice(0, 10),
-    colonia: comp('neighborhood', 'sublocality_level_2', 'sublocality_level_1', 'sublocality').replace(/^col(onia)?\.?\s+/i, '').slice(0, 80),
-    cp,
+    colonia,
+    cp: cp && CPS[cp] ? cp : '',
     alcaldia_id: alc ? alc.id : null,
   };
 }

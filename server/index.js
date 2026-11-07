@@ -1,19 +1,19 @@
 /* Dopta · servidor web y API REST. Inicia con:  npm start */
 const arranque = require('./arranque');
 
-arranque.prepararEnv(); // crea .env si falta y carga la configuración antes de conectar a MySQL
+arranque.prepararEnv(); // crea .env si falta y carga la configuración antes de conectar a la base
 const path = require('path');
 const express = require('express');
-const { q, EN_VERCEL } = require('./db');
-const { ErrorApp, ahora, haceMin } = require('./util');
+const { q } = require('./db');
+const { ErrorApp, ahora, haceMin, hoy, notificar } = require('./util');
 const seg = require('./seguridad');
 
 const app = express();
 const PUBLICO = path.join(__dirname, '..', 'public');
 
 app.disable('x-powered-by');
-// En Vercel (y detrás de cualquier proxy HTTPS) la IP y el protocolo reales vienen en cabeceras X-Forwarded-*
-app.set('trust proxy', EN_VERCEL || process.env.TRUST_PROXY === '1' ? 1 : false);
+// En Render (y detrás de cualquier proxy HTTPS) la IP y el protocolo reales vienen en cabeceras X-Forwarded-*
+app.set('trust proxy', arranque.EN_NUBE || process.env.TRUST_PROXY === '1' ? 1 : false);
 app.use(seg.forzarHttps);
 app.use(seg.cabeceras);
 app.use(seg.bloquearSondeos);
@@ -41,16 +41,17 @@ app.use(express.static(PUBLICO, {
 }));
 
 /* ---------- Estado de la base de datos ----------
-   Mientras MySQL no esté disponible la API responde 503 con la causa exacta (nunca un 500 genérico). */
+   Mientras PostgreSQL no esté disponible la API responde 503 con la causa exacta (nunca un 500 genérico). */
 const estadoBD = { lista: false, mensaje: 'El servidor se está iniciando. Intente de nuevo en unos segundos.' };
-const ERRORES_CONEXION = ['ECONNREFUSED', 'PROTOCOL_CONNECTION_LOST', 'ER_CON_COUNT_ERROR', 'ETIMEDOUT', 'EHOSTUNREACH',
-  'ENOTFOUND', 'ER_ACCESS_DENIED_ERROR', 'ER_BAD_DB_ERROR', 'ECONNRESET', 'ER_NO_SUCH_TABLE', 'ER_BAD_FIELD_ERROR'];
+// Códigos de Node y de PostgreSQL que indican que la base no está disponible o su estructura no coincide
+const ERRORES_CONEXION = ['ECONNREFUSED', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENOTFOUND', 'ECONNRESET', 'EAI_AGAIN',
+  'ER_ACCESS_DENIED_ERROR', 'ER_BAD_DB_ERROR', '42P01', '42703', '57P01', '57P03', '53300', '08006', '08001', '08003'];
 let reconectando = false;
 async function conectarBD() {
   if (reconectando) return;
   reconectando = true;
   let avisado = '';
-  // Reintenta cada 5 s hasta que MySQL esté listo (por ejemplo, si se enciende XAMPP después)
+  // Reintenta cada 5 s hasta que la base esté lista (por ejemplo, si el proyecto de Supabase estaba pausado)
   for (;;) {
     const problema = await arranque.prepararBD();
     if (!problema) break;
@@ -64,39 +65,19 @@ async function conectarBD() {
   console.log(arranque.verde('[✓] Base de datos conectada.'));
 }
 
-let preparando = null;
-function asegurarBD() {
-  if (!preparando) {
-    preparando = arranque.prepararBD().then((problema) => {
-      if (problema) { preparando = null; console.error(`[BD] ${problema}`); } else estadoBD.lista = true;
-      return problema;
-    });
-  }
-  return preparando;
-}
-
 /* ---------- API ---------- */
 const api = express.Router();
 api.use((req, res, next) => { res.set('X-Dopta-Version', arranque.VERSION); next(); });
 api.get('/version', (req, res) => res.json({ version: arranque.VERSION, bd: estadoBD.lista }));
-if (EN_VERCEL) {
-  // En Vercel no hay un proceso permanente: la base se prepara (y migra) una vez por instancia, en la primera petición
-  api.use(async (req, res, next) => {
-    if (!estadoBD.lista) {
-      const problema = await asegurarBD();
-      if (problema) return res.status(503).json({ error: problema, codigo: 'BD' });
-    }
-    next();
-  });
-} else {
-  api.use((req, res, next) => (estadoBD.lista ? next() : res.status(503).json({ error: estadoBD.mensaje, codigo: 'BD' })));
-}
+api.use((req, res, next) => (estadoBD.lista ? next() : res.status(503).json({ error: estadoBD.mensaje, codigo: 'BD' })));
+// La foto de perfil llega como imagen (máx. 300 KB ya recortada y comprimida en el navegador); lo demás, JSON
+api.put('/cuenta/avatar', express.raw({ type: ['image/webp', 'image/jpeg', 'image/png'], limit: '300kb' }));
 api.use(express.json({ limit: '100kb', strict: true }));
 api.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 api.use(seg.limitador({ ventanaMin: 15, max: 600 }));
 api.use(seg.antiCsrf);
 api.use(seg.cargarSesion);
-/* Vercel Cron llama a esta ruta una vez al día (vercel.json). Solo responde con la clave CRON_SECRET. */
+/* Para un cron externo (p. ej. cron-job.org) si el servicio gratuito de Render estuvo dormido. Requiere CRON_SECRET. */
 api.get('/cron/mantenimiento', async (req, res) => {
   const clave = process.env.CRON_SECRET;
   if (!clave || req.headers.authorization !== `Bearer ${clave}`) return res.status(401).json({ error: 'No autorizado.' });
@@ -122,13 +103,14 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   if (err instanceof ErrorApp) return res.status(err.status).json({ error: err.message, ...(err.extra || {}) });
   if (err.status === 404 || err.statusCode === 404) return res.status(404).type('text').send('No encontrado');
-  if (err.type === 'entity.parse.failed' || err.type === 'entity.too.large') return res.status(400).json({ error: 'Solicitud inválida.' });
+  if (err.type === 'entity.too.large') return res.status(413).json({ error: 'El archivo es demasiado grande.' });
+  if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Solicitud inválida.' });
   if (ERRORES_CONEXION.includes(err.code)) {
-    // Se perdió MySQL o la estructura no coincide: se explica la causa y se intenta reparar en segundo plano
+    // Se perdió la base o la estructura no coincide: se explica la causa y se intenta reparar en segundo plano
     estadoBD.lista = false;
     estadoBD.mensaje = arranque.explicarErrorBD(err);
     console.log(arranque.rojo(`[X] ${estadoBD.mensaje}`));
-    if (EN_VERCEL) preparando = null; else conectarBD();
+    conectarBD();
     return res.status(503).json({ error: estadoBD.mensaje, codigo: 'BD' });
   }
   console.error(`[${ahora()}]`, req.method, req.originalUrl, err);
@@ -145,11 +127,23 @@ async function mantenimiento() {
     // RF-10: elimina los datos personales 30 días después de la baja
     const bajas = await q("SELECT id, tipo FROM usuarios WHERE estado = 'baja' AND purgado = 0 AND purgar_en <= ?", [ahora()]);
     for (const u of bajas) {
-      await q("UPDATE usuarios SET nombre = 'Cuenta dada de baja', correo = ?, hash = '!', purgado = 1 WHERE id = ?", [`baja-${u.id}@dopta.invalid`, u.id]);
+      await q("UPDATE usuarios SET nombre = 'Cuenta dada de baja', correo = ?, hash = '!', telefono = NULL, avatar_v = 0, purgado = 1 WHERE id = ?", [`baja-${u.id}@dopta.invalid`, u.id]);
       if (u.tipo === 'refugio') await q("UPDATE refugios SET institucion = 'Datos eliminados', direccion = 'Datos eliminados', calle = NULL, num_ext = NULL, num_int = NULL, colonia = NULL, cp = NULL, telefono = '0000000000', lat = NULL, lng = NULL, place_id = NULL WHERE usuario_id = ?", [u.id]);
-      await q('UPDATE usuarios SET telefono = NULL WHERE id = ?', [u.id]);
-      await q('UPDATE solicitudes SET mensaje = NULL WHERE adoptante_id = ?', [u.id]); // el mensaje es dato personal
+      // Mensajes, cuestionarios y foto son datos personales
+      await q("UPDATE mensajes SET texto = '[mensaje eliminado]' WHERE autor_id = ?", [u.id]);
+      await q('UPDATE solicitudes SET cuestionario = NULL WHERE adoptante_id = ?', [u.id]);
+      await q('DELETE FROM avatares WHERE usuario_id = ?', [u.id]);
       await q('DELETE FROM notificaciones WHERE usuario_id = ?', [u.id]);
+    }
+    // Seguimiento post-adopción: avisa al refugio cuando toca contactar a la familia
+    const toca = await q(
+      `SELECT sg.id, sg.etapa, a.refugio_id, a.nombre AS animal, s.id AS solicitud_id
+         FROM seguimientos sg JOIN solicitudes s ON s.id = sg.solicitud_id JOIN animales a ON a.id = s.animal_id
+        WHERE sg.avisado = 0 AND sg.realizado_en IS NULL AND sg.programado <= ?`, [hoy()]);
+    for (const x of toca) {
+      const etapa = { '1_semana': '1 semana', '1_mes': '1 mes', '3_meses': '3 meses' }[x.etapa];
+      await notificar(x.refugio_id, `Toca el seguimiento de ${etapa} de ${x.animal}: contacta a la familia y registra cómo está.`, undefined, `#/refugio/solicitudes?id=${x.solicitud_id}`);
+      await q('UPDATE seguimientos SET avisado = 1 WHERE id = ?', [x.id]);
     }
   } catch (e) {
     console.error('Mantenimiento:', e.message);

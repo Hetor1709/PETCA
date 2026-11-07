@@ -4,7 +4,7 @@ const helmet = require('helmet');
 const { q, uno } = require('./db');
 const { ahora, haceMin, falla } = require('./util');
 
-const PROD = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+const PROD = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
 const COOKIE = PROD ? '__Host-dopta_sid' : 'dopta_sid';
 const INACTIVIDAD_MIN = 30;
 
@@ -19,6 +19,7 @@ const cabeceras = helmet({
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:'],
       connectSrc: ["'self'"],
+      frameSrc: process.env.GOOGLE_MAPS_EMBED_KEY ? ['https://www.google.com'] : ["'none'"], // mapa del admin (Maps Embed API)
       objectSrc: ["'none'"],
       baseUri: ["'none'"],
       formAction: ["'self'"],
@@ -114,7 +115,7 @@ async function cargarSesion(req, res, next) {
     if (!token || token.length > 100) return next();
     const th = sha256(token);
     const s = await uno(
-      `SELECT s.ultima_actividad, u.id, u.tipo, u.nombre, u.correo, u.estado
+      `SELECT s.ultima_actividad, u.id, u.tipo, u.nombre, u.correo, u.estado, u.avatar_v
          FROM sesiones s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token_hash = ?`, [th]);
     if (!s) { borrarCookie(res); return next(); }
     if (s.estado !== 'activa') {
@@ -132,7 +133,7 @@ async function cargarSesion(req, res, next) {
     if (req.headers['x-dopta-auto'] !== '1' && s.ultima_actividad < haceMin(0.5)) {
       await q('UPDATE sesiones SET ultima_actividad = ? WHERE token_hash = ?', [ahora(), th]);
     }
-    req.usuario = { id: s.id, tipo: s.tipo, nombre: s.nombre, correo: s.correo };
+    req.usuario = { id: s.id, tipo: s.tipo, nombre: s.nombre, correo: s.correo, avatar_v: s.avatar_v };
     req.tokenHash = th;
     next();
   } catch (e) { next(e); }

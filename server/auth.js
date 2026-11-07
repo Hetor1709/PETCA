@@ -7,7 +7,7 @@ const {
   h, V, falla, limpiar, ahora, hoy, haceMin, enMin, sumarDias, notificar,
 } = require('./util');
 const {
-  limitador, requiere, crearSesion, cerrarSesion, borrarCookie, sha256,
+  limitador, requiere, crearSesion, cerrarSesion, borrarCookie, sha256, tipoImagen,
 } = require('./seguridad');
 const correo = require('./correo');
 const { enCDMX, RE_PLACE } = require('./lugares');
@@ -17,7 +17,9 @@ const AVISO_VERSION = 'v1.0';
 const COSTO = 12;
 const HASH_FALSO = bcrypt.hashSync('contrasena-falsa-0', COSTO); // iguala tiempos si el correo no existe
 
-const PANEL = { adoptante: '#/', refugio: '#/refugio', admin: '#/admin' };
+const PANEL = { adoptante: '#/', refugio: '#/refugio', admin: '#/admin', funcionario: '#/admin' };
+// Cuenta vigente con ese correo (las dadas de baja o eliminadas liberan su correo y teléfono para una cuenta nueva)
+const VIGENTE = "estado NOT IN ('baja','eliminada')";
 
 const limiteLogin = limitador({ ventanaMin: 15, max: 10, clave: (req) => `${req.ip}|${String(req.body?.correo || '').toLowerCase()}`, mensaje: 'Demasiados intentos de inicio de sesión. Espere 15 minutos.' });
 const limiteRegistro = limitador({ ventanaMin: 60, max: 10, mensaje: 'Demasiados registros desde esta conexión. Intente más tarde.' });
@@ -25,12 +27,12 @@ const limiteRegistro = limitador({ ventanaMin: 60, max: 10, mensaje: 'Demasiados
 const vacio = (...v) => v.some((x) => typeof x !== 'string' || !x.trim());
 
 /* Datos institucionales del Refugio (RF-04) */
-async function validarRefugio(b) {
+async function validarRefugio(b, propioId = 0) {
   const alcaldias = await q("SELECT id, nombre FROM catalogo_valores WHERE catalogo = 'alcaldia' AND activo = 1");
   const datos = {
     institucion: V.nombreRefugio(b.institucion, 'El nombre de la institución debe tener de 3 a 120 caracteres.'),
-    ...V.ubicacion(b, alcaldias), // calle, num_ext, num_int, colonia, cp, alcaldia_id y la dirección armada
-    telefono: V.telefono(b.telefono),
+    ...V.ubicacion(b, alcaldias), // calle, num_ext, num_int, colonia (de SEPOMEX), cp, alcaldia_id y la dirección armada
+    telefono: await V.telefonoLibre(V.telefono(b.telefono), propioId),
     horario: V.horario(b.horario),
     // Coordenadas de Google Places (opcionales): solo se aceptan dentro de la CDMX
     lat: null,
@@ -59,7 +61,7 @@ async function guardarRefugio(conn, id, d, nuevo) {
   }
   for (const x of d.horario) {
     await q(`INSERT INTO refugio_horarios (refugio_id, dia, cerrado, abre, cierra) VALUES (?, ?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE cerrado = VALUES(cerrado), abre = VALUES(abre), cierra = VALUES(cierra)`,
+             ON CONFLICT (refugio_id, dia) DO UPDATE SET cerrado = EXCLUDED.cerrado, abre = EXCLUDED.abre, cierra = EXCLUDED.cierra`,
     [id, x.dia, x.cerrado, x.abre, x.cierra], conn);
   }
 }
@@ -72,24 +74,26 @@ r.post('/auth/registro', limiteRegistro, h(async (req, res) => {
   if (b.aviso !== true) falla('Debe aceptar el aviso de privacidad para crear una cuenta.');
 
   const nombre = tipo === 'adoptante' ? V.nombrePersona(b.nombre) : V.nombreRefugio(b.nombre);
-  const mail = V.correo(b.correo);
+  const mail = await V.correoExiste(b.correo);
   const pass = V.contrasena(b.contrasena);
   if (typeof b.confirmar === 'string' && b.confirmar !== pass) falla('Las contraseñas no coinciden.');
+  // Protocolo de adopción CDMX: solo personas mayores de edad pueden adoptar
+  if (tipo === 'adoptante' && b.mayor_edad !== true) falla('Para adoptar debes ser mayor de 18 años. Confirma la casilla de mayoría de edad.');
+  if (await uno(`SELECT id FROM usuarios WHERE lower(correo) = ? AND ${VIGENTE}`, [mail])) falla('El correo electrónico ya está registrado.', 409);
   const inst = tipo === 'refugio' ? await validarRefugio(b) : null;
-  const telefono = tipo === 'adoptante' ? V.telefono(b.telefono) : null; // el refugio lo usa para contactarlo
-
-  if (await uno('SELECT id FROM usuarios WHERE correo = ?', [mail])) falla('El correo electrónico ya está registrado.', 409);
+  const telefono = tipo === 'adoptante' ? await V.telefonoLibre(V.telefono(b.telefono)) : null; // el refugio lo usa para contactarlo
 
   const hash = await bcrypt.hash(pass, COSTO);
   const t = ahora();
   await tx(async (c) => {
     const ins = await q(
-      `INSERT INTO usuarios (tipo, nombre, correo, telefono, hash, estado, aviso_version, aviso_fecha, creado)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [tipo, nombre, mail, telefono, hash, tipo === 'refugio' ? 'pendiente' : 'activa', AVISO_VERSION, t.slice(0, 16) + ':00', t], c);
+      `INSERT INTO usuarios (tipo, nombre, correo, telefono, hash, estado, aviso_version, aviso_fecha, creado, mayor_edad_en)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      [tipo, nombre, mail, telefono, hash, tipo === 'refugio' ? 'pendiente' : 'activa', AVISO_VERSION, t.slice(0, 16) + ':00', t,
+        tipo === 'adoptante' ? t : null], c);
     if (inst) await guardarRefugio(c, ins.insertId, inst, true);
   }).catch((e) => {
-    if (e.code === 'ER_DUP_ENTRY') falla('El correo electrónico ya está registrado.', 409);
+    if (e.code === 'ER_DUP_ENTRY') falla(/telefono/.test(e.constraint || '') ? 'Ese teléfono ya está registrado en otra cuenta.' : 'El correo electrónico ya está registrado.', 409);
     throw e;
   });
 
@@ -103,11 +107,11 @@ r.post('/auth/revalidar', limiteLogin, h(async (req, res) => {
   const b = req.body || {};
   if (vacio(b.correo, b.contrasena, b.nombre)) falla('Complete todos los campos obligatorios.');
   const mail = V.correo(b.correo);
-  const u = await uno("SELECT id, hash, estado, tipo FROM usuarios WHERE correo = ?", [mail]);
+  const u = await uno(`SELECT id, hash, estado, tipo FROM usuarios WHERE lower(correo) = ? AND ${VIGENTE}`, [mail]);
   const ok = await bcrypt.compare(String(b.contrasena), u ? u.hash : HASH_FALSO);
   if (!u || !ok || u.tipo !== 'refugio' || u.estado !== 'rechazada') falla('Correo o contraseña incorrectos.', 401);
   const nombre = V.nombreRefugio(b.nombre);
-  const inst = await validarRefugio(b);
+  const inst = await validarRefugio(b, u.id);
   await tx(async (c) => {
     await q("UPDATE usuarios SET nombre = ?, estado = 'pendiente', creado = ?, rechazado_en = NULL WHERE id = ?", [nombre, ahora(), u.id], c);
     await guardarRefugio(c, u.id, inst, false);
@@ -123,7 +127,7 @@ r.post('/auth/login', limiteLogin, h(async (req, res) => {
   if (!mail || mail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mail) || pass.length < 8 || pass.length > 64) {
     falla('Complete los campos con un formato válido.');
   }
-  const u = await uno('SELECT id, tipo, nombre, correo, hash, estado FROM usuarios WHERE correo = ?', [mail]);
+  const u = await uno(`SELECT id, tipo, nombre, correo, hash, estado, avatar_v FROM usuarios WHERE lower(correo) = ? AND ${VIGENTE}`, [mail]);
   const ok = await bcrypt.compare(pass, u ? u.hash : HASH_FALSO);
   if (!u || !ok || u.estado === 'baja' || u.estado === 'eliminada') falla('Correo o contraseña incorrectos.', 401);
   if (u.estado === 'pendiente') falla('Su cuenta está pendiente de verificación.', 403);
@@ -132,7 +136,7 @@ r.post('/auth/login', limiteLogin, h(async (req, res) => {
   await cerrarSesion(req, res); // evita fijación de sesión
   res.removeHeader('Set-Cookie');
   await crearSesion(res, u.id, req.ip);
-  res.json({ usuario: { id: u.id, tipo: u.tipo, nombre: u.nombre, correo: u.correo }, panel: PANEL[u.tipo] });
+  res.json({ usuario: { id: u.id, tipo: u.tipo, nombre: u.nombre, correo: u.correo, avatar_v: u.avatar_v }, panel: PANEL[u.tipo] });
 }));
 
 /* ---------- RF-06: cerrar sesión ---------- */
@@ -154,12 +158,12 @@ r.post('/auth/recuperar', limitador({ ventanaMin: 60, max: 20 }), h(async (req, 
   if (Number(n.n) >= 3) falla('Ha alcanzado el límite de 3 solicitudes por hora. Intente más tarde.', 429);
   await q('INSERT INTO recuperacion_intentos (correo, creado_en) VALUES (?, ?)', [mail, ahora()]);
 
-  const u = await uno("SELECT id, nombre FROM usuarios WHERE correo = ? AND estado = 'activa'", [mail]);
+  const u = await uno("SELECT id, nombre FROM usuarios WHERE lower(correo) = ? AND estado = 'activa'", [mail]);
   if (u) {
     const token = crypto.randomBytes(32).toString('base64url');
     await q('INSERT INTO recuperaciones (token_hash, usuario_id, expira_en) VALUES (?, ?, ?)', [sha256(token), u.id, enMin(30)]);
-    const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : '';
-    const base = (process.env.BASE_URL || vercel || `${req.protocol}://${req.headers.host}`).replace(/\/$/, '');
+    const render = process.env.RENDER_EXTERNAL_URL || '';
+    const base = (process.env.BASE_URL || render || `${req.protocol}://${req.headers.host}`).replace(/\/$/, '');
     correo.enviarRecuperacion(mail, u.nombre, `${base}/#/restablecer?token=${token}`).catch((e) => console.error('Correo:', e.message));
   }
   // Misma respuesta exista o no la cuenta (CA3)
@@ -186,6 +190,8 @@ r.post('/auth/restablecer', limitador({ ventanaMin: 15, max: 20 }), h(async (req
   const hash = await bcrypt.hash(pass, COSTO);
   await tx(async (c) => {
     const t = await tokenValido(b.token, c);
+    const u = await uno('SELECT hash FROM usuarios WHERE id = ?', [t.usuario_id], c);
+    if (await bcrypt.compare(pass, u.hash)) falla('La nueva contraseña debe ser distinta a la que ya tenías.');
     await q('UPDATE usuarios SET hash = ? WHERE id = ?', [hash, t.usuario_id], c);
     await q('UPDATE recuperaciones SET usado_en = ? WHERE token_hash = ?', [ahora(), t.token_hash], c);
     await q('DELETE FROM sesiones WHERE usuario_id = ?', [t.usuario_id], c);
@@ -195,9 +201,10 @@ r.post('/auth/restablecer', limitador({ ventanaMin: 15, max: 20 }), h(async (req
 
 /* ---------- Cuenta (RF-07, RF-09, RF-10) ---------- */
 r.get('/cuenta', requiere(), h(async (req, res) => {
-  const u = await uno('SELECT id, tipo, nombre, correo, telefono, creado, aviso_version FROM usuarios WHERE id = ?', [req.usuario.id]);
+  const u = await uno('SELECT id, tipo, nombre, correo, telefono, creado, aviso_version, avatar_v, mayor_edad_en IS NOT NULL AS mayor_edad FROM usuarios WHERE id = ?', [req.usuario.id]);
   if (u.tipo === 'refugio') {
     u.refugio = await uno('SELECT institucion FROM refugios WHERE usuario_id = ?', [u.id]);
+    u.cambio_pendiente = await uno("SELECT id, datos, LEFT(creado_en::text, 16) AS creado_en FROM refugio_cambios WHERE refugio_id = ? AND estado = 'pendiente'", [u.id]);
   }
   res.json(u);
 }));
@@ -210,19 +217,52 @@ r.put('/cuenta/nombre', requiere('adoptante', 'refugio'), h(async (req, res) => 
     try { n = V.nombrePersona(b.nombre); } catch { falla(msg); }
     await q('UPDATE usuarios SET nombre = ? WHERE id = ?', [n, req.usuario.id]);
   } else {
+    // Nombre e institución del refugio: el cambio lo aprueba el Administrador antes de aplicarse
     const n = V.nombreRefugio(b.nombre, msg);
     const i = V.nombreRefugio(b.institucion, msg);
-    await q('UPDATE usuarios SET nombre = ? WHERE id = ?', [n, req.usuario.id]);
-    await q('UPDATE refugios SET institucion = ? WHERE usuario_id = ?', [i, req.usuario.id]);
+    const { solicitarCambioRefugio } = require('./cambios');
+    const r2 = await solicitarCambioRefugio(req.usuario, { nombre: n, institucion: i });
+    return res.json(r2);
   }
   res.json({ mensaje: 'Datos actualizados.' });
 }));
 
 /* Teléfono del adoptante (lo ve solo el refugio con el que tiene una solicitud) */
 r.put('/cuenta/telefono', requiere('adoptante'), h(async (req, res) => {
-  const tel = V.telefono((req.body || {}).telefono);
+  const tel = await V.telefonoLibre(V.telefono((req.body || {}).telefono), req.usuario.id);
   await q('UPDATE usuarios SET telefono = ? WHERE id = ?', [tel, req.usuario.id]);
   res.json({ mensaje: 'Teléfono actualizado.' });
+}));
+
+/* ---------- Foto de perfil: el navegador la recorta a 256×256 y la comprime; aquí se valida por su firma binaria ---------- */
+const TIPOS_IMG = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+r.put('/cuenta/avatar', requiere(), limitador({ ventanaMin: 15, max: 20 }), h(async (req, res) => {
+  const buf = Buffer.isBuffer(req.body) ? req.body : null;
+  const ext = tipoImagen(buf);
+  if (!buf || !ext) falla('La foto debe ser una imagen PNG, JPG o WebP.');
+  if (buf.length > 300 * 1024) falla('La foto es demasiado grande (máximo 300 KB).', 413);
+  await tx(async (c) => {
+    await q(`INSERT INTO avatares (usuario_id, tipo, datos, creado_en) VALUES (?, ?, ?, ?)
+             ON CONFLICT (usuario_id) DO UPDATE SET tipo = EXCLUDED.tipo, datos = EXCLUDED.datos, creado_en = EXCLUDED.creado_en`,
+    [req.usuario.id, TIPOS_IMG[ext], buf, ahora()], c);
+    await q('UPDATE usuarios SET avatar_v = avatar_v + 1 WHERE id = ?', [req.usuario.id], c);
+  });
+  const u = await uno('SELECT avatar_v FROM usuarios WHERE id = ?', [req.usuario.id]);
+  res.json({ mensaje: 'Foto de perfil actualizada.', avatar_v: u.avatar_v });
+}));
+
+r.delete('/cuenta/avatar', requiere(), h(async (req, res) => {
+  await q('DELETE FROM avatares WHERE usuario_id = ?', [req.usuario.id]);
+  await q('UPDATE usuarios SET avatar_v = 0 WHERE id = ?', [req.usuario.id]);
+  res.json({ mensaje: 'Foto de perfil eliminada.', avatar_v: 0 });
+}));
+
+/* La foto se sirve con caché larga: la URL cambia (?v=) cada vez que el usuario sube otra */
+r.get('/avatar/:id', h(async (req, res) => {
+  const a = await uno("SELECT a.tipo, a.datos FROM avatares a JOIN usuarios u ON u.id = a.usuario_id WHERE a.usuario_id = ? AND u.estado <> 'eliminada'", [V.id(req.params.id)]);
+  if (!a) return res.status(404).json({ error: 'Sin foto.' });
+  res.set({ 'Content-Type': a.tipo, 'Cache-Control': 'public, max-age=31536000, immutable', 'Content-Security-Policy': "default-src 'none'; sandbox" });
+  res.send(a.datos);
 }));
 
 r.put('/cuenta/contrasena', requiere(), limitador({ ventanaMin: 15, max: 10 }), h(async (req, res) => {
@@ -230,6 +270,7 @@ r.put('/cuenta/contrasena', requiere(), limitador({ ventanaMin: 15, max: 10 }), 
   const u = await uno('SELECT hash FROM usuarios WHERE id = ?', [req.usuario.id]);
   if (typeof b.actual !== 'string' || !(await bcrypt.compare(b.actual, u.hash))) falla('La contraseña actual es incorrecta.');
   const nueva = V.contrasena(b.nueva);
+  if (await bcrypt.compare(nueva, u.hash)) falla('La nueva contraseña debe ser distinta a la actual.');
   await q('UPDATE usuarios SET hash = ? WHERE id = ?', [await bcrypt.hash(nueva, COSTO), req.usuario.id]);
   // Cierra las demás sesiones abiertas con la contraseña anterior
   await q('DELETE FROM sesiones WHERE usuario_id = ? AND token_hash <> ?', [req.usuario.id, req.tokenHash]);
@@ -255,7 +296,7 @@ r.post('/cuenta/baja', requiere('adoptante', 'refugio'), limitador({ ventanaMin:
 async function retirarActividad(c, usuario, motivoAdoptante, motivoRefugio) {
   const t = ahora();
   if (usuario.tipo === 'adoptante') {
-    await q("UPDATE solicitudes SET estado = 'rechazada', motivo_rechazo = ?, rechazada_en = ? WHERE adoptante_id = ? AND estado = 'pendiente'",
+    await q("UPDATE solicitudes SET estado = 'cancelada', motivo_rechazo = ?, rechazada_en = ? WHERE adoptante_id = ? AND estado IN ('pendiente','aprobada') AND concretada_en IS NULL",
       [motivoAdoptante, t, usuario.id], c);
   } else if (usuario.tipo === 'refugio') {
     const pend = await q(
@@ -263,7 +304,7 @@ async function retirarActividad(c, usuario, motivoAdoptante, motivoRefugio) {
         WHERE a.refugio_id = ? AND s.estado IN ('pendiente','aprobada') AND a.estado = 'disponible'`, [usuario.id], c);
     for (const s of pend) {
       await q("UPDATE solicitudes SET estado = 'rechazada', motivo_rechazo = ?, rechazada_en = ? WHERE id = ?", [motivoRefugio, t, s.id], c);
-      await notificar(s.adoptante_id, `Su solicitud para ${s.nombre} fue rechazada: ${motivoRefugio}`, c);
+      await notificar(s.adoptante_id, `Su solicitud para ${s.nombre} fue rechazada: ${motivoRefugio}`, c, `#/solicitudes?id=${s.id}`);
     }
     await q("UPDATE animales SET eliminado = 1, eliminado_por = 'refugio', eliminado_en = ? WHERE refugio_id = ? AND eliminado = 0 AND estado = 'disponible'",
       [t, usuario.id], c);
@@ -273,7 +314,7 @@ async function retirarActividad(c, usuario, motivoAdoptante, motivoRefugio) {
 /* ---------- RF-24: notificaciones ---------- */
 r.get('/notificaciones', requiere(), h(async (req, res) => {
   const lista = await q(
-    'SELECT id, texto, leida, creada_en FROM notificaciones WHERE usuario_id = ? ORDER BY id DESC LIMIT 100', [req.usuario.id]);
+    'SELECT id, texto, enlace, leida, creada_en FROM notificaciones WHERE usuario_id = ? ORDER BY id DESC LIMIT 100', [req.usuario.id]);
   res.json(lista);
 }));
 
