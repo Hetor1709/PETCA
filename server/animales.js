@@ -170,12 +170,14 @@ r.get('/animales/:id', h(async (req, res) => {
     `SELECT r.nombre, c.nombre AS tipo FROM requisitos r JOIN catalogo_valores c ON c.id = r.tipo_id WHERE r.animal_id = ? ORDER BY r.id`, [id]);
   a.vacunas = await q('SELECT nombre, fecha FROM vacunas WHERE animal_id = ? ORDER BY fecha', [id]);
   a.horario = await horario(a.refugio_id);
-  if (req.usuario && req.usuario.tipo === 'adoptante') {
+  const adopta = req.usuario && (req.usuario.tipo === 'adoptante' || (req.usuario.tipo === 'refugio' && req.usuario.id !== a.refugio_id));
+  if (adopta) {
     a.miSolicitud = await uno(
       "SELECT id, estado FROM solicitudes WHERE animal_id = ? AND adoptante_id = ? AND estado IN ('pendiente','aprobada')", [id, req.usuario.id]);
   }
-  // Solo las personas adoptantes usan el proceso de adopción (los refugios publican y los administradores administran)
-  a.puedeSolicitar = !req.usuario || req.usuario.tipo === 'adoptante';
+  // Adoptan las personas y también los refugios (no de su propio refugio); los administradores solo administran
+  a.puedeSolicitar = !req.usuario || !!adopta;
+  a.esMio = !!(req.usuario && req.usuario.id === a.refugio_id);
   res.json(a);
 }));
 

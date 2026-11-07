@@ -16,7 +16,8 @@ const { requiere } = require('./seguridad');
 const { cerrarPendientes, marcarAdopcion } = require('./animales');
 
 const r = express.Router();
-const soloAdoptante = requiere('adoptante');
+// Adoptan las personas adoptantes y también los refugios (nunca un perro de su propio refugio)
+const soloAdoptante = requiere('adoptante', 'refugio');
 const soloRefugio = requiere('refugio');
 
 /* ---------- Formato de adopción ---------- */
@@ -82,13 +83,15 @@ r.post('/solicitudes', soloAdoptante, h(async (req, res) => {
   if (faltan.length) falla('Para continuar acepta cada punto de la carta compromiso de adopción.');
   const mensaje = V.texto(b.mensaje, { min: 10, max: 300, campo: 'El mensaje', opcional: true, minPalabras: 2, lineas: 4 });
   const yo = await uno('SELECT telefono, mayor_edad_en FROM usuarios WHERE id = ?', [req.usuario.id]);
+  const esRefugio = req.usuario.tipo === 'refugio';
+  if (esRefugio) yo.telefono = (await uno('SELECT telefono FROM refugios WHERE usuario_id = ?', [req.usuario.id])).telefono; // contacto: el del refugio
   if (!yo.mayor_edad_en && b.mayor_edad !== true) falla('Para adoptar debes ser mayor de 18 años. Confírmalo en el formato.');
   // El refugio necesita un teléfono de contacto: si la cuenta no lo tiene, se pide en la solicitud
-  const telefono = b.telefono ? await V.telefonoLibre(V.telefono(b.telefono), req.usuario.id) : yo.telefono;
+  const telefono = b.telefono && !esRefugio ? await V.telefonoLibre(V.telefono(b.telefono), req.usuario.id) : yo.telefono;
   if (!telefono) falla('Agregue su teléfono de contacto para que el refugio pueda comunicarse con usted.', 400, { codigo: 'TELEFONO' });
   const t = ahora();
   const id = await tx(async (c) => {
-    if (telefono !== yo.telefono) await q('UPDATE usuarios SET telefono = ? WHERE id = ?', [telefono, req.usuario.id], c);
+    if (!esRefugio && telefono !== yo.telefono) await q('UPDATE usuarios SET telefono = ? WHERE id = ?', [telefono, req.usuario.id], c);
     if (!yo.mayor_edad_en) await q('UPDATE usuarios SET mayor_edad_en = ? WHERE id = ?', [t, req.usuario.id], c);
     // Bloquea al adoptante y al animal para que dos envíos simultáneos no rebasen los límites
     await q('SELECT id FROM usuarios WHERE id = ? FOR UPDATE', [req.usuario.id], c);
@@ -96,6 +99,7 @@ r.post('/solicitudes', soloAdoptante, h(async (req, res) => {
       `SELECT a.id, a.nombre, a.estado, a.eliminado, a.refugio_id, u.estado AS refugio_estado
          FROM animales a JOIN usuarios u ON u.id = a.refugio_id WHERE a.id = ? FOR UPDATE OF a`, [animalId], c);
     if (!a || a.eliminado || a.estado !== 'disponible' || a.refugio_estado !== 'activa') falla('El animal ya no está disponible para adopción.', 409);
+    if (a.refugio_id === req.usuario.id) falla('No puedes solicitar la adopción de un perro de tu propio refugio.', 403);
     const dup = await uno("SELECT id FROM solicitudes WHERE animal_id = ? AND adoptante_id = ? AND estado IN ('pendiente','aprobada')", [animalId, req.usuario.id], c);
     if (dup) falla('Ya tiene una solicitud activa para el animal.', 409);
     const mias = await uno("SELECT COUNT(*) AS n FROM solicitudes WHERE adoptante_id = ? AND estado IN ('pendiente','aprobada') AND concretada_en IS NULL", [req.usuario.id], c);
@@ -120,7 +124,8 @@ async function adjuntar(lista, yoId) {
        FROM mensajes m JOIN usuarios u ON u.id = m.autor_id WHERE m.solicitud_id = ANY(?) ORDER BY m.id`, [ids]);
   const segs = await q('SELECT id, solicitud_id, etapa, programado, realizado_en, resultado, notas FROM seguimientos WHERE solicitud_id = ANY(?) ORDER BY programado', [ids]);
   for (const s of lista) {
-    s.mensajes = msgs.filter((m) => m.solicitud_id === s.id).map((m) => ({ ...m, mio: m.autor_id === yoId }));
+    // es_adoptante: el autor es quien adopta (puede ser una cuenta de refugio adoptando de otro refugio)
+    s.mensajes = msgs.filter((m) => m.solicitud_id === s.id).map((m) => ({ ...m, mio: m.autor_id === yoId, es_adoptante: m.autor_id === s.adoptante_id }));
     s.sin_leer = s.mensajes.filter((m) => !m.mio && !m.leido).length;
     s.seguimientos = segs.filter((x) => x.solicitud_id === s.id);
     s.resumen = resumenCuestionario(s.cuestionario);
@@ -170,7 +175,7 @@ r.get('/refugio/solicitudes', soloRefugio, h(async (req, res) => {
     `SELECT s.id, s.estado, LEFT(s.enviada_en, 16) AS enviada, LEFT(s.aprobada_en, 10) AS aprobada, s.motivo_rechazo, s.cuestionario,
             s.concretada_en, s.visita, s.visita_en, s.entrega,
             a.id AS animal_id, a.nombre AS animal, a.estado AS animal_estado, a.raza, a.raza_aprox, a.esterilizado, e.nombre AS edad,
-            u.id AS adoptante_id, u.nombre AS adoptante, u.correo AS adoptante_correo, u.telefono AS adoptante_telefono, u.avatar_v AS adoptante_avatar,
+            u.id AS adoptante_id, u.nombre AS adoptante, u.correo AS adoptante_correo, COALESCE(u.telefono, (SELECT rr.telefono FROM refugios rr WHERE rr.usuario_id = u.id)) AS adoptante_telefono, u.tipo AS adoptante_tipo, u.avatar_v AS adoptante_avatar,
             c.fecha AS cita_fecha, c.hora AS cita_hora
        FROM solicitudes s
        JOIN animales a ON a.id = s.animal_id
@@ -375,9 +380,12 @@ const MOTIVOS = {
 r.post('/reportes', requiere('adoptante', 'refugio'), limitadorReportes(), h(async (req, res) => {
   const b = req.body || {};
   const tipo = Object.keys(MOTIVOS).includes(b.objetivo_tipo) ? b.objetivo_tipo : falla('Objetivo inválido.');
-  const permitido = req.usuario.tipo === 'adoptante' ? ['animal', 'refugio'] : ['usuario'];
+  // Quien adopta reporta publicaciones y refugios; el refugio además reporta a quienes le enviaron solicitudes
+  const permitido = req.usuario.tipo === 'adoptante' ? ['animal', 'refugio'] : ['animal', 'refugio', 'usuario'];
   if (!permitido.includes(tipo)) falla('No puedes reportar este tipo de cuenta.', 403);
   const objetivo = V.id(b.objetivo_id);
+  if ((tipo === 'refugio' || tipo === 'usuario') && objetivo === req.usuario.id) falla('No puedes reportar tu propia cuenta.', 400);
+  if (tipo === 'animal' && await uno('SELECT id FROM animales WHERE id = ? AND refugio_id = ?', [objetivo, req.usuario.id])) falla('No puedes reportar tu propia publicación.', 400);
   if (!MOTIVOS[tipo].includes(b.motivo)) falla('Seleccione un motivo.');
   const desc = V.texto(b.descripcion, { min: 10, max: 300, campo: 'La descripción', minPalabras: 3, lineas: 4 });
   let existe;
@@ -387,7 +395,7 @@ r.post('/reportes', requiere('adoptante', 'refugio'), limitadorReportes(), h(asy
     // Solo adoptantes que hayan enviado una solicitud a este refugio
     existe = await uno(
       `SELECT u.id FROM usuarios u JOIN solicitudes s ON s.adoptante_id = u.id JOIN animales a ON a.id = s.animal_id
-        WHERE u.id = ? AND u.tipo = 'adoptante' AND a.refugio_id = ? LIMIT 1`, [objetivo, req.usuario.id]);
+        WHERE u.id = ? AND u.tipo IN ('adoptante', 'refugio') AND a.refugio_id = ? LIMIT 1`, [objetivo, req.usuario.id]);
   }
   if (!existe) falla('El objetivo reportado no existe.', 404);
   const dup = await uno("SELECT id FROM reportes WHERE autor_id = ? AND objetivo_tipo = ? AND objetivo_id = ? AND estado = 'abierto'", [req.usuario.id, tipo, objetivo]);

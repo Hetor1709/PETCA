@@ -33,7 +33,7 @@ render.yaml        despliegue en Render
 | Rol | Puede |
 |---|---|
 | **Adoptante** | Ver el catálogo, enviar el formato de adopción, conversar con el refugio, cancelar, reportar refugios y publicaciones |
-| **Refugio** | Publicar y editar perros, revisar solicitudes, agendar cita, registrar visita, entrega y seguimiento, reportar adoptantes. **No puede adoptar** |
+| **Refugio** | Publicar y editar perros, revisar solicitudes, agendar cita, registrar visita, entrega y seguimiento, reportar adoptantes. También puede adoptar de **otros** refugios ("Mis adopciones"), nunca un perro propio |
 | **Funcionario** | Atender reportes y ver estadísticas (lo asigna el Administrador a una cuenta de adoptante) |
 | **Administrador** | Uno solo. Verifica refugios (con el mapa), aprueba cambios de datos, modera, administra cuentas y catálogos. No se pueden crear más administradores desde la app (índice único en la base); solo con `npm run admin -- --reemplazar` |
 

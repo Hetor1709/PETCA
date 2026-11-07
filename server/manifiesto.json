@@ -3,7 +3,7 @@
  "archivos": {
   "database/schema.sql": "8ba10ab07b046098",
   "public/app.css": "3e0fe188d2bb9776",
-  "public/app.js": "5301bfaa5aca43f5",
+  "public/app.js": "f3ff3a10f31c1c69",
   "public/filtro.js": "4deba5c80e5fcc81",
   "public/img/cargando.svg": "1d3113fa760264e2",
   "public/img/error-404.svg": "a306c980001aa8d4",
@@ -14,9 +14,9 @@
   "public/razas.js": "efaf4b355bdc1d1c",
   "public/reglas.js": "11c8756175d00531",
   "server/admin.js": "d0412844d4f9e34e",
-  "server/animales.js": "10c8cc3e9c09a9e6",
+  "server/animales.js": "ad11bb59b29545a5",
   "server/arranque.js": "ddcbf6a295dd13ba",
-  "server/auth.js": "75b4c1d62fa60817",
+  "server/auth.js": "606ec997e2323170",
   "server/cambios.js": "cc744ec4c7be1085",
   "server/correo.js": "51cfeb70a2cb426e",
   "server/cp_cdmx.json": "050d6a278fbb1030",
@@ -27,7 +27,7 @@
   "server/lugares.js": "59fd738d6605e5e2",
   "server/razas.json": "90a419da8dacf409",
   "server/seguridad.js": "e1dfa1ca9356d945",
-  "server/solicitudes.js": "fa3fc6d324ef00e7",
+  "server/solicitudes.js": "5a8543d3d355b91a",
   "server/util.js": "928162bc10a0a668"
  }
 }

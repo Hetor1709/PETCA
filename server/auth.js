@@ -295,10 +295,11 @@ r.post('/cuenta/baja', requiere('adoptante', 'refugio'), limitador({ ventanaMin:
 /* Al dar de baja o eliminar una cuenta se cierran sus solicitudes pendientes o sus publicaciones */
 async function retirarActividad(c, usuario, motivoAdoptante, motivoRefugio) {
   const t = ahora();
-  if (usuario.tipo === 'adoptante') {
+  if (usuario.tipo === 'adoptante' || usuario.tipo === 'refugio') { // un refugio también puede tener solicitudes como adoptante
     await q("UPDATE solicitudes SET estado = 'cancelada', motivo_rechazo = ?, rechazada_en = ? WHERE adoptante_id = ? AND estado IN ('pendiente','aprobada') AND concretada_en IS NULL",
       [motivoAdoptante, t, usuario.id], c);
-  } else if (usuario.tipo === 'refugio') {
+  }
+  if (usuario.tipo === 'refugio') {
     const pend = await q(
       `SELECT s.id, s.adoptante_id, a.nombre FROM solicitudes s JOIN animales a ON a.id = s.animal_id
         WHERE a.refugio_id = ? AND s.estado IN ('pendiente','aprobada') AND a.estado = 'disponible'`, [usuario.id], c);
