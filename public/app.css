@@ -16,7 +16,7 @@
   /* Superficies y colores que cambian con el modo claro/oscuro */
   --color-fondo: #F1FCFE;
   --color-superficie: #ffffff;
-  --color-encabezado: #4489bd;
+  --color-encabezado: #2c5c8a;
   --color-contorno: #616467;
 
   --radius-sm: 12px;
@@ -32,17 +32,17 @@
 /* ---------- Modo oscuro ----------
    Se activa con data-theme="oscuro" en <html> (lo controla js/tema.js) */
 html[data-theme="oscuro"] {
-  --color-fondo: #0e1a26;
-  --color-superficie: #172636;
-  --color-encabezado: #1d3a54;
-  --color-contorno: #b8c4cc;
+  --color-fondo: #111313;
+  --color-superficie: #1c1f20;
+  --color-encabezado: #3b7bb8;
+  --color-contorno: #b37719;
   --color-azul: #2a5577;
   --color-azul-suave: #1f3d57;
-  --color-azul-fuerte: #8cc7f0;
+  --color-azul-fuerte: #3b7bb8;
   --color-azul-texto: #bfe3f8;
-  --color-durazno: #D8AF97;
-  --color-durazno-oscuro: #b08650;
-  --color-texto: #eaf4fb;
+  --color-durazno: #cf9e50;
+  --color-durazno-oscuro: #b37719;
+  --color-texto: #dfe5ea;
   --sombra-card: 0 4px 0 rgba(0, 0, 0, 0.35);
   color-scheme: dark;
 }
