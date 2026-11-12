@@ -4,15 +4,15 @@ Dopta ya no necesita Node.js ni PostgreSQL. Todo corre en el navegador:
 
 - `public/index.html`, `public/app.css`, `public/app.js`: interfaz (sin cambios de fondo).
 - `public/js/servidor.js`: sustituye a la antigua API. Atiende las llamadas `/api/...` con la misma lógica de validación, solicitudes, citas, adopciones, refugios, reportes y estadísticas.
-- `data/catalogos.json`, `data/razas.json`, `data/cp_cdmx.json`: datos iniciales (catálogos, razas y códigos postales de la CDMX).
-- `data/esquema.json`: estructura de las tablas (equivalente a la antigua `database/schema.sql`).
+- `public/data/catalogos.json`, `public/data/razas.json`, `public/data/cp_cdmx.json`: datos iniciales (catálogos, razas y códigos postales de la CDMX).
+- `public/data/esquema.json`: estructura de las tablas (equivalente a la antigua `database/schema.sql`).
 
 ## Cómo abrirlo
 
 Hay que servir la carpeta con cualquier servidor estático (no sirve abrir el HTML con doble clic, porque el navegador no carga los JSON). Por ejemplo:
 
 ```bash
-npx serve .
+npx serve public
 ```
 
 o subir la carpeta a un hosting estático (GitHub Pages, Hostinger, Netlify).
