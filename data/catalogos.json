@@ -1,0 +1,457 @@
+[
+ {
+  "id": 1,
+  "catalogo": "tamano",
+  "nombre": "Pequeño",
+  "orden": 1,
+  "activo": 1
+ },
+ {
+  "id": 2,
+  "catalogo": "tamano",
+  "nombre": "Mediano",
+  "orden": 2,
+  "activo": 1
+ },
+ {
+  "id": 3,
+  "catalogo": "tamano",
+  "nombre": "Grande",
+  "orden": 3,
+  "activo": 1
+ },
+ {
+  "id": 4,
+  "catalogo": "tipo_requisito",
+  "nombre": "Texto",
+  "orden": 1,
+  "activo": 1
+ },
+ {
+  "id": 5,
+  "catalogo": "tipo_requisito",
+  "nombre": "Documental",
+  "orden": 2,
+  "activo": 1
+ },
+ {
+  "id": 6,
+  "catalogo": "edad",
+  "nombre": "1 mes",
+  "orden": 1,
+  "activo": 1
+ },
+ {
+  "id": 7,
+  "catalogo": "edad",
+  "nombre": "2 meses",
+  "orden": 2,
+  "activo": 1
+ },
+ {
+  "id": 8,
+  "catalogo": "edad",
+  "nombre": "3 meses",
+  "orden": 3,
+  "activo": 1
+ },
+ {
+  "id": 9,
+  "catalogo": "edad",
+  "nombre": "4 meses",
+  "orden": 4,
+  "activo": 1
+ },
+ {
+  "id": 10,
+  "catalogo": "edad",
+  "nombre": "5 meses",
+  "orden": 5,
+  "activo": 1
+ },
+ {
+  "id": 11,
+  "catalogo": "edad",
+  "nombre": "6 meses",
+  "orden": 6,
+  "activo": 1
+ },
+ {
+  "id": 12,
+  "catalogo": "edad",
+  "nombre": "7 meses",
+  "orden": 7,
+  "activo": 1
+ },
+ {
+  "id": 13,
+  "catalogo": "edad",
+  "nombre": "8 meses",
+  "orden": 8,
+  "activo": 1
+ },
+ {
+  "id": 14,
+  "catalogo": "edad",
+  "nombre": "9 meses",
+  "orden": 9,
+  "activo": 1
+ },
+ {
+  "id": 15,
+  "catalogo": "edad",
+  "nombre": "10 meses",
+  "orden": 10,
+  "activo": 1
+ },
+ {
+  "id": 16,
+  "catalogo": "edad",
+  "nombre": "11 meses",
+  "orden": 11,
+  "activo": 1
+ },
+ {
+  "id": 17,
+  "catalogo": "edad",
+  "nombre": "1 año",
+  "orden": 12,
+  "activo": 1
+ },
+ {
+  "id": 18,
+  "catalogo": "edad",
+  "nombre": "2 años",
+  "orden": 13,
+  "activo": 1
+ },
+ {
+  "id": 19,
+  "catalogo": "edad",
+  "nombre": "3 años",
+  "orden": 14,
+  "activo": 1
+ },
+ {
+  "id": 20,
+  "catalogo": "edad",
+  "nombre": "4 años",
+  "orden": 15,
+  "activo": 1
+ },
+ {
+  "id": 21,
+  "catalogo": "edad",
+  "nombre": "5 años",
+  "orden": 16,
+  "activo": 1
+ },
+ {
+  "id": 22,
+  "catalogo": "edad",
+  "nombre": "6 años",
+  "orden": 17,
+  "activo": 1
+ },
+ {
+  "id": 23,
+  "catalogo": "edad",
+  "nombre": "7 años",
+  "orden": 18,
+  "activo": 1
+ },
+ {
+  "id": 24,
+  "catalogo": "edad",
+  "nombre": "8 años",
+  "orden": 19,
+  "activo": 1
+ },
+ {
+  "id": 25,
+  "catalogo": "edad",
+  "nombre": "9 años",
+  "orden": 20,
+  "activo": 1
+ },
+ {
+  "id": 26,
+  "catalogo": "edad",
+  "nombre": "10 años",
+  "orden": 21,
+  "activo": 1
+ },
+ {
+  "id": 27,
+  "catalogo": "edad",
+  "nombre": "11 años",
+  "orden": 22,
+  "activo": 1
+ },
+ {
+  "id": 28,
+  "catalogo": "edad",
+  "nombre": "12 años",
+  "orden": 23,
+  "activo": 1
+ },
+ {
+  "id": 29,
+  "catalogo": "edad",
+  "nombre": "13 años",
+  "orden": 24,
+  "activo": 1
+ },
+ {
+  "id": 30,
+  "catalogo": "edad",
+  "nombre": "14 años",
+  "orden": 25,
+  "activo": 1
+ },
+ {
+  "id": 31,
+  "catalogo": "edad",
+  "nombre": "15 años",
+  "orden": 26,
+  "activo": 1
+ },
+ {
+  "id": 32,
+  "catalogo": "alcaldia",
+  "nombre": "Álvaro Obregón",
+  "orden": 1,
+  "activo": 1
+ },
+ {
+  "id": 33,
+  "catalogo": "alcaldia",
+  "nombre": "Azcapotzalco",
+  "orden": 2,
+  "activo": 1
+ },
+ {
+  "id": 34,
+  "catalogo": "alcaldia",
+  "nombre": "Benito Juárez",
+  "orden": 3,
+  "activo": 1
+ },
+ {
+  "id": 35,
+  "catalogo": "alcaldia",
+  "nombre": "Coyoacán",
+  "orden": 4,
+  "activo": 1
+ },
+ {
+  "id": 36,
+  "catalogo": "alcaldia",
+  "nombre": "Cuajimalpa de Morelos",
+  "orden": 5,
+  "activo": 1
+ },
+ {
+  "id": 37,
+  "catalogo": "alcaldia",
+  "nombre": "Cuauhtémoc",
+  "orden": 6,
+  "activo": 1
+ },
+ {
+  "id": 38,
+  "catalogo": "alcaldia",
+  "nombre": "Gustavo A. Madero",
+  "orden": 7,
+  "activo": 1
+ },
+ {
+  "id": 39,
+  "catalogo": "alcaldia",
+  "nombre": "Iztacalco",
+  "orden": 8,
+  "activo": 1
+ },
+ {
+  "id": 40,
+  "catalogo": "alcaldia",
+  "nombre": "Iztapalapa",
+  "orden": 9,
+  "activo": 1
+ },
+ {
+  "id": 41,
+  "catalogo": "alcaldia",
+  "nombre": "La Magdalena Contreras",
+  "orden": 10,
+  "activo": 1
+ },
+ {
+  "id": 42,
+  "catalogo": "alcaldia",
+  "nombre": "Miguel Hidalgo",
+  "orden": 11,
+  "activo": 1
+ },
+ {
+  "id": 43,
+  "catalogo": "alcaldia",
+  "nombre": "Milpa Alta",
+  "orden": 12,
+  "activo": 1
+ },
+ {
+  "id": 44,
+  "catalogo": "alcaldia",
+  "nombre": "Tláhuac",
+  "orden": 13,
+  "activo": 1
+ },
+ {
+  "id": 45,
+  "catalogo": "alcaldia",
+  "nombre": "Tlalpan",
+  "orden": 14,
+  "activo": 1
+ },
+ {
+  "id": 46,
+  "catalogo": "alcaldia",
+  "nombre": "Venustiano Carranza",
+  "orden": 15,
+  "activo": 1
+ },
+ {
+  "id": 47,
+  "catalogo": "alcaldia",
+  "nombre": "Xochimilco",
+  "orden": 16,
+  "activo": 1
+ },
+ {
+  "id": 48,
+  "catalogo": "vacuna",
+  "nombre": "Antirrábica",
+  "orden": 1,
+  "activo": 1
+ },
+ {
+  "id": 49,
+  "catalogo": "vacuna",
+  "nombre": "Parvovirus",
+  "orden": 2,
+  "activo": 1
+ },
+ {
+  "id": 50,
+  "catalogo": "vacuna",
+  "nombre": "Moquillo",
+  "orden": 3,
+  "activo": 1
+ },
+ {
+  "id": 51,
+  "catalogo": "vacuna",
+  "nombre": "Hepatitis canina",
+  "orden": 4,
+  "activo": 1
+ },
+ {
+  "id": 52,
+  "catalogo": "vacuna",
+  "nombre": "Leptospirosis",
+  "orden": 5,
+  "activo": 1
+ },
+ {
+  "id": 53,
+  "catalogo": "vacuna",
+  "nombre": "Parainfluenza",
+  "orden": 6,
+  "activo": 1
+ },
+ {
+  "id": 54,
+  "catalogo": "vacuna",
+  "nombre": "Bordetella (tos de las perreras)",
+  "orden": 7,
+  "activo": 1
+ },
+ {
+  "id": 55,
+  "catalogo": "vacuna",
+  "nombre": "Coronavirus canino",
+  "orden": 8,
+  "activo": 1
+ },
+ {
+  "id": 56,
+  "catalogo": "vacuna",
+  "nombre": "Múltiple (quíntuple o séxtuple)",
+  "orden": 9,
+  "activo": 1
+ },
+ {
+  "id": 57,
+  "catalogo": "documento",
+  "nombre": "Identificación oficial vigente (INE o pasaporte)",
+  "orden": 1,
+  "activo": 1
+ },
+ {
+  "id": 58,
+  "catalogo": "documento",
+  "nombre": "Comprobante de domicilio reciente",
+  "orden": 2,
+  "activo": 1
+ },
+ {
+  "id": 59,
+  "catalogo": "documento",
+  "nombre": "CURP",
+  "orden": 3,
+  "activo": 1
+ },
+ {
+  "id": 60,
+  "catalogo": "documento",
+  "nombre": "Comprobante de ingresos",
+  "orden": 4,
+  "activo": 1
+ },
+ {
+  "id": 61,
+  "catalogo": "documento",
+  "nombre": "Carta responsiva de adopción firmada",
+  "orden": 5,
+  "activo": 1
+ },
+ {
+  "id": 62,
+  "catalogo": "documento",
+  "nombre": "Fotografías del espacio donde vivirá",
+  "orden": 6,
+  "activo": 1
+ },
+ {
+  "id": 63,
+  "catalogo": "documento",
+  "nombre": "Dos referencias personales con teléfono",
+  "orden": 7,
+  "activo": 1
+ },
+ {
+  "id": 64,
+  "catalogo": "documento",
+  "nombre": "Permiso del arrendador (si rentas)",
+  "orden": 8,
+  "activo": 1
+ },
+ {
+  "id": 65,
+  "catalogo": "documento",
+  "nombre": "Aceptación de todos los que viven en el hogar",
+  "orden": 9,
+  "activo": 1
+ }
+]

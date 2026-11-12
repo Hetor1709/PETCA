@@ -1749,7 +1749,10 @@
           ocupado(b);
           try {
             const r = await api('/auth/recuperar', { metodo: 'POST', datos: { correo } });
-            $('[data-ok]', f).textContent = r.mensaje;
+            const ok = $('[data-ok]', f);
+            ok.textContent = r.mensaje;
+            // Sin servidor de correo, el enlace de recuperación se muestra aquí mismo
+            if (r.enlace) { const a = document.createElement('a'); a.href = r.enlace; a.textContent = 'Abrir enlace para restablecer tu contraseña'; ok.append(' ', a); }
           } catch (err) { errorEn(f, textoError(err)); } finally { ocupado(b, false); }
         });
       },
@@ -1812,7 +1815,7 @@
   }
   /* Foto de perfil o, si no hay, la silueta con iniciales */
   const avatar = (u, tam = 'grande') => (u && Number(u.avatar_v) > 0
-    ? html`<img class="avatar avatar--${tam}" src="/api/avatar/${u.id}?v=${u.avatar_v}" alt="" width="${tam === 'mini' ? 28 : tam === 'chico' ? 40 : 104}" height="${tam === 'mini' ? 28 : tam === 'chico' ? 40 : 104}" loading="lazy">`
+    ? html`<img class="avatar avatar--${tam}" src="${window.DoptaServidor ? window.DoptaServidor.urlAvatar(u.id) : ''}" alt="" width="${tam === 'mini' ? 28 : tam === 'chico' ? 40 : 104}" height="${tam === 'mini' ? 28 : tam === 'chico' ? 40 : 104}" loading="lazy">`
     : tam === 'mini' ? html`<span class="avatar avatar--mini avatar--vacio" aria-hidden="true">${String(u && u.nombre || '?').trim()[0].toUpperCase()}</span>`
       : siluetaUsuario(u && u.nombre, u && u.tipo, tam === 'grande'));
 
