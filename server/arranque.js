@@ -1,5 +1,5 @@
 /* Arranque con autodiagnóstico.
-   Carga el .env, comprueba PostgreSQL, crea o actualiza las tablas (database/schema.sql es idempotente)
+   Carga el .env, comprueba MySQL (y crea la base si falta), crea o actualiza las tablas (database/schema.sql es idempotente)
    y revisa que los archivos del proyecto sean los de esta versión. Si algo falla, explica cómo resolverlo. */
 const fs = require('fs');
 const os = require('os');
@@ -10,7 +10,6 @@ const RAIZ = path.join(__dirname, '..');
 const ENV = path.join(RAIZ, '.env');
 const MANIFIESTO = path.join(__dirname, 'manifiesto.json');
 const VERSION = require('../package.json').version;
-const EN_NUBE = !!(process.env.RENDER || process.env.VERCEL);
 
 const verde = (t) => `\x1b[32m${t}\x1b[0m`;
 const amarillo = (t) => `\x1b[33m${t}\x1b[0m`;
@@ -18,58 +17,85 @@ const rojo = (t) => `\x1b[31m${t}\x1b[0m`;
 
 /* 1. Archivo .env: si no existe se crea a partir de .env.example */
 function prepararEnv() {
-  // En Render la configuración llega por variables de entorno del servicio (no hay .env)
-  if (EN_NUBE) return;
   if (!fs.existsSync(ENV)) {
     const ejemplo = path.join(RAIZ, '.env.example');
     fs.writeFileSync(ENV, fs.existsSync(ejemplo) ? fs.readFileSync(ejemplo, 'utf8') : '');
     console.log(amarillo('[!] No había archivo .env: se creó uno a partir de .env.example.'));
-    console.log(amarillo('    Pon tu cadena de conexión de Supabase en DATABASE_URL (o los datos DB_*) y vuelve a ejecutar npm start.'));
+    console.log(amarillo('    Si tu MySQL tiene contraseña, ponla en DB_PASSWORD y vuelve a ejecutar npm start.'));
   }
   require('dotenv').config({ path: ENV });
 }
 
-/* Mensaje claro para cada error típico de PostgreSQL */
+/* Mensaje claro para cada error típico de MySQL */
 function explicarErrorBD(e) {
-  const { descripcion } = require('./db');
+  const { descripcion, nombreBase } = require('./db');
   const donde = descripcion();
-  const variables = EN_NUBE ? 'las variables de entorno del servicio en Render' : 'el archivo .env';
   switch (e.code) {
-    case 'ECONNREFUSED': case 'ETIMEDOUT': case 'EHOSTUNREACH': case 'ENOTFOUND': case 'ECONNRESET': case 'EAI_AGAIN':
-      return `La base de datos (${donde}) no responde. Revisa DATABASE_URL en ${variables} y que el proyecto de Supabase esté activo (los proyectos gratuitos se pausan tras una semana sin uso).`;
-    case 'ER_ACCESS_DENIED_ERROR':
-      return `La base de datos rechazó el usuario o la contraseña. Copia de nuevo la cadena de conexión de Supabase (Project Settings → Database) en DATABASE_URL de ${variables}.`;
+    case 'ECONNREFUSED': case 'ETIMEDOUT': case 'EHOSTUNREACH': case 'ENOTFOUND': case 'ECONNRESET': case 'EAI_AGAIN': case 'PROTOCOL_CONNECTION_LOST':
+      return `No se pudo conectar con ${donde}. Comprueba que el servicio de MySQL esté iniciado y que DB_HOST y DB_PORT del archivo .env sean correctos.`;
+    case 'ER_ACCESS_DENIED_ERROR': case 'ER_ACCESS_DENIED_NO_PASSWORD_ERROR':
+      return `MySQL rechazó el usuario o la contraseña (${donde}). Revisa DB_USER y DB_PASSWORD en el archivo .env.`;
     case 'ER_BAD_DB_ERROR':
-      return `La base de datos indicada no existe. En Supabase usa la base "postgres" (viene en la cadena de conexión).`;
-    case 'SELF_SIGNED_CERT_IN_CHAIN': case 'DEPTH_ZERO_SELF_SIGNED_CERT': case 'UNABLE_TO_VERIFY_LEAF_SIGNATURE':
-      return `No se pudo validar el certificado TLS de ${donde}. Quita DB_SSL_CA o pon el certificado correcto de tu proveedor.`;
-    case '42501':
-      return `El usuario de la base no tiene permisos para crear tablas. Usa el usuario "postgres" de Supabase.`;
+      return `La base de datos "${nombreBase()}" no existe y no se pudo crear. Créala desde MySQL con:  CREATE DATABASE ${nombreBase()} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`;
+    case 'ER_DBACCESS_DENIED_ERROR': case 'ER_TABLEACCESS_DENIED_ERROR': case 'ER_SPECIFIC_ACCESS_DENIED_ERROR':
+      return `El usuario de MySQL no tiene permisos sobre la base "${nombreBase()}" (crear tablas, consultar y modificar). Usa un usuario con todos los permisos sobre esa base, por ejemplo root.`;
+    case 'ER_CON_COUNT_ERROR':
+      return 'MySQL tiene demasiadas conexiones abiertas. Cierra otros programas que lo usen o reinicia el servicio.';
     default:
-      return `Error de PostgreSQL (${e.code || ''} ${e.message}).`;
+      return `Error de MySQL (${e.code || ''} ${e.message}).`;
   }
 }
 
-/* Crea o actualiza las tablas. Es seguro repetirlo: todo usa IF NOT EXISTS / ON CONFLICT. */
+/* La base se crea sola la primera vez (solo si no existe). El nombre viene de .env: se valida antes de usarlo en SQL. */
+async function crearBase() {
+  const mysql = require('mysql2/promise');
+  const { config, nombreBase } = require('./db');
+  const nombre = nombreBase();
+  if (!/^[A-Za-z0-9_$]{1,64}$/.test(nombre)) throw new Error(`DB_NAME "${nombre}" no es válido: usa solo letras, números y guion bajo.`);
+  const c = await mysql.createConnection(config({ conBase: false }));
+  try {
+    await c.query(`CREATE DATABASE IF NOT EXISTS \`${nombre}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+  } finally {
+    await c.end().catch(() => {});
+  }
+}
+
+/* Crea o actualiza las tablas. Es seguro repetirlo: todo usa IF NOT EXISTS / INSERT IGNORE. */
 async function crearEsquema() {
-  const { pool } = require('./db');
+  const mysql = require('mysql2/promise');
+  const { config } = require('./db');
   // Ruta escrita completa para que los empaquetadores incluyan schema.sql
   const sql = fs.readFileSync(path.join(__dirname, '..', 'database', 'schema.sql'), 'utf8');
-  const c = await pool.connect();
+  // Conexión aparte con varias sentencias permitidas (el esquema es un archivo propio, sin datos del usuario)
+  const c = await mysql.createConnection({ ...config(), multipleStatements: true });
   try {
-    await c.query('SELECT pg_advisory_lock(424242)'); // si arrancan dos instancias, una espera a la otra
+    const [[bloqueo]] = await c.query("SELECT GET_LOCK('dopta_esquema', 30) AS ok"); // si arrancan dos procesos, uno espera al otro
+    if (!bloqueo.ok) throw new Error('No se pudo obtener el bloqueo para crear las tablas.');
     await c.query(sql);
   } finally {
-    await c.query('SELECT pg_advisory_unlock(424242)').catch(() => {});
-    c.release();
+    await c.query("DO RELEASE_LOCK('dopta_esquema')").catch(() => {});
+    await c.end().catch(() => {});
   }
 }
 
-/* 2. Base de datos: conecta y crea/actualiza las tablas. Devuelve null si todo está bien o el mensaje del problema. */
+/* Dopta usa FOR UPDATE OF, columnas generadas y CHECK: pide MySQL 8.0.16 o más reciente (MariaDB no es compatible) */
+function versionCompatible(v) {
+  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v));
+  if (!m || /mariadb/i.test(String(v))) return false;
+  const [mayor, menor, parche] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  return mayor > 8 || (mayor === 8 && (menor > 0 || parche >= 16));
+}
+
+/* 2. Base de datos: conecta (creándola si falta) y crea/actualiza las tablas. Devuelve null si todo está bien o el mensaje del problema. */
 async function prepararBD() {
   const { q } = require('./db');
   try {
-    await q('SELECT 1');
+    try { await q('SELECT 1'); } catch (e) {
+      if (e.code !== 'ER_BAD_DB_ERROR') throw e;
+      await crearBase();
+    }
+    const [{ v }] = await q('SELECT VERSION() AS v');
+    if (!versionCompatible(v)) return `Dopta necesita MySQL 8.0.16 o más reciente y esta computadora tiene ${v}. Descarga MySQL Community Server en https://dev.mysql.com/downloads/mysql/ (MariaDB no es compatible).`;
     await crearEsquema();
     const admins = await q("SELECT COUNT(*) AS n FROM usuarios WHERE tipo = 'admin' AND estado = 'activa'");
     if (!Number(admins[0].n)) {
@@ -106,7 +132,7 @@ function generarManifiesto() {
 }
 
 function revisarArchivos() {
-  if (EN_NUBE || !fs.existsSync(MANIFIESTO)) return { faltan: [], distintos: [], sinManifiesto: true };
+  if (!fs.existsSync(MANIFIESTO)) return { faltan: [], distintos: [], sinManifiesto: true };
   const m = JSON.parse(fs.readFileSync(MANIFIESTO, 'utf8'));
   const faltan = [];
   const distintos = [];
@@ -131,6 +157,6 @@ function direcciones(puerto) {
 }
 
 module.exports = {
-  VERSION, EN_NUBE, prepararEnv, prepararBD, crearEsquema, explicarErrorBD,
+  VERSION, prepararEnv, prepararBD, crearBase, crearEsquema, versionCompatible, explicarErrorBD,
   generarManifiesto, revisarArchivos, direcciones, verde, amarillo, rojo,
 };

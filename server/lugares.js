@@ -48,7 +48,7 @@ r.get('/lugares/cp/:cp', h(async (req, res) => {
   if (!/^\d{5}$/.test(cp)) falla('El código postal debe tener exactamente 5 dígitos.');
   const d = CPS[cp];
   if (!d) falla(`El código postal ${cp} no existe en la Ciudad de México.`, 404);
-  const alc = await q("SELECT id FROM catalogo_valores WHERE catalogo = 'alcaldia' AND sin_acentos(nombre) = sin_acentos(?)", [d.a]);
+  const alc = await q("SELECT id FROM catalogo_valores WHERE catalogo = 'alcaldia' AND nombre = ?", [d.a]);
   res.set('Cache-Control', 'public, max-age=86400');
   res.json({ cp, alcaldia: d.a, alcaldia_id: alc[0] ? alc[0].id : null, colonias: d.c.map(([nombre, tipo]) => ({ nombre, tipo })) });
 }));

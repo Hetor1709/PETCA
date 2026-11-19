@@ -58,7 +58,7 @@ r.get('/animales', h(async (req, res) => {
     const n = normalizar(texto);
     const razas = RAZAS_LISTA.filter((x) => normalizar(x.nombre).includes(n)).map((x) => x.id);
     if ('mestizo'.includes(n)) razas.push('mestizo');
-    const cond = ['sin_acentos(a.nombre) LIKE ?', 'sin_acentos(u.nombre) LIKE ?'];
+    const cond = ['a.nombre LIKE ?', 'u.nombre LIKE ?'];
     const patron = `%${n.replace(/[%_\\]/g, '\\$&')}%`;
     params.push(patron, patron);
     if (razas.length) {
@@ -118,7 +118,7 @@ r.get('/refugios', h(async (req, res) => {
   let filtro = '';
   if (texto) {
     const t = `%${normalizar(texto).replace(/[%_\\]/g, '\\$&')}%`;
-    filtro = ' AND (sin_acentos(u.nombre) LIKE ? OR sin_acentos(rf.institucion) LIKE ? OR sin_acentos(al.nombre) LIKE ?)';
+    filtro = ' AND (u.nombre LIKE ? OR rf.institucion LIKE ? OR al.nombre LIKE ?)';
     params.push(t, t, t);
   }
   const lista = await q(`${SELECT_REFUGIO}${filtro} ORDER BY disponibles DESC, u.nombre LIMIT 60`, params);
@@ -317,7 +317,7 @@ r.post('/refugio/animales', soloRefugio, h(async (req, res) => {
         `INSERT INTO animales (refugio_id, nombre, raza, raza_aprox, edad_id, tamano_id,
                                salud_general, tratamiento, temp_general, temp_perros, temp_desconocidos, temp_comida, fecha_ingreso,
                                esterilizado, fecha_esterilizacion, desparasitado, peso_kg, altura_cm, publicado_en, actualizado_en)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [req.usuario.id, v.nombre, v.raza, v.razaAprox, v.edadId, v.tamanoId, ...CAMPOS_ANIMAL.map((c) => v.cerrados[c]), v.fechaIngreso,
           v.esterilizado, v.fechaEst, v.desparasitado, v.dims.peso, v.dims.altura, t, t], c);
       await guardarDetalle(c, ins.insertId, v);
@@ -434,7 +434,7 @@ async function marcarAdopcion(c, s, fecha, entrega) {
   await q('UPDATE solicitudes SET concretada_en = ?, entrega = ? WHERE id = ?', [fecha, JSON.stringify(lista), s.id], c);
   // Seguimiento posterior: 1 semana, 1 mes y 3 meses después de la entrega
   for (const [etapa, dias] of [['1_semana', 7], ['1_mes', 30], ['3_meses', 90]]) {
-    await q('INSERT INTO seguimientos (solicitud_id, etapa, programado) VALUES (?, ?, ?) ON CONFLICT (solicitud_id, etapa) DO NOTHING', [s.id, etapa, sumarDias(fecha, dias)], c);
+    await q('INSERT INTO seguimientos (solicitud_id, etapa, programado) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE solicitud_id = solicitud_id', [s.id, etapa, sumarDias(fecha, dias)], c);
   }
   await notificar(s.adoptante_id, `¡Felicidades! La adopción de ${s.animal} quedó concretada el ${fecha}. El refugio te contactará para el seguimiento.`, c, `#/solicitudes?id=${s.id}`);
   return cerrarPendientes(c, { id: s.animal_id, nombre: s.animal });
@@ -451,7 +451,7 @@ r.post('/refugio/animales/:id/estado', soloRefugio, h(async (req, res) => {
     if (estado === 'adoptado') {
       // Mismo flujo que RF-22: exige la solicitud aprobada y la fecha de concreción
       const s = await uno(
-        `SELECT s.*, ?::text AS animal, ?::text AS animal_estado, 0 AS eliminado FROM solicitudes s
+        `SELECT s.*, CAST(? AS CHAR) AS animal, CAST(? AS CHAR) AS animal_estado, 0 AS eliminado FROM solicitudes s
           WHERE s.animal_id = ? AND s.estado = 'aprobada' AND s.concretada_en IS NULL FOR UPDATE`, [a.nombre, a.estado, id], c);
       if (!s) falla('No hay una solicitud aprobada para el animal.', 409);
       return marcarAdopcion(c, s, req.body.fecha, req.body.entrega);

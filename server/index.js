@@ -12,9 +12,7 @@ const app = express();
 const PUBLICO = path.join(__dirname, '..', 'public');
 
 app.disable('x-powered-by');
-// En Render (y detrás de cualquier proxy HTTPS) la IP y el protocolo reales vienen en cabeceras X-Forwarded-*
-app.set('trust proxy', arranque.EN_NUBE || process.env.TRUST_PROXY === '1' ? 1 : false);
-app.use(seg.forzarHttps);
+app.set('trust proxy', false); // sin proxy: la IP y el protocolo son los de la conexión directa
 app.use(seg.cabeceras);
 app.use(seg.bloquearSondeos);
 
@@ -36,22 +34,22 @@ app.get(Object.keys(ANTIGUAS), (req, res) => {
 app.use(express.static(PUBLICO, {
   index: 'index.html',
   dotfiles: 'deny',
-  maxAge: seg.PROD ? '7d' : 0,
+  maxAge: 0, // en local siempre se sirve la versión más reciente de los archivos
   setHeaders: (res, ruta) => { if (ruta.endsWith('index.html')) res.set('Cache-Control', 'no-cache'); },
 }));
 
 /* ---------- Estado de la base de datos ----------
-   Mientras PostgreSQL no esté disponible la API responde 503 con la causa exacta (nunca un 500 genérico). */
+   Mientras MySQL no esté disponible la API responde 503 con la causa exacta (nunca un 500 genérico). */
 const estadoBD = { lista: false, mensaje: 'El servidor se está iniciando. Intente de nuevo en unos segundos.' };
-// Códigos de Node y de PostgreSQL que indican que la base no está disponible o su estructura no coincide
-const ERRORES_CONEXION = ['ECONNREFUSED', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENOTFOUND', 'ECONNRESET', 'EAI_AGAIN',
-  'ER_ACCESS_DENIED_ERROR', 'ER_BAD_DB_ERROR', '42P01', '42703', '57P01', '57P03', '53300', '08006', '08001', '08003'];
+// Códigos de Node y de MySQL que indican que la base no está disponible o su estructura no coincide
+const ERRORES_CONEXION = ['ECONNREFUSED', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENOTFOUND', 'ECONNRESET', 'EAI_AGAIN', 'PROTOCOL_CONNECTION_LOST',
+  'ER_ACCESS_DENIED_ERROR', 'ER_BAD_DB_ERROR', 'ER_NO_SUCH_TABLE', 'ER_BAD_FIELD_ERROR', 'ER_CON_COUNT_ERROR', 'ER_SERVER_SHUTDOWN'];
 let reconectando = false;
 async function conectarBD() {
   if (reconectando) return;
   reconectando = true;
   let avisado = '';
-  // Reintenta cada 5 s hasta que la base esté lista (por ejemplo, si el proyecto de Supabase estaba pausado)
+  // Reintenta cada 5 s hasta que la base esté lista (por ejemplo, si el servicio de MySQL aún se está iniciando)
   for (;;) {
     const problema = await arranque.prepararBD();
     if (!problema) break;
@@ -77,13 +75,6 @@ api.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 api.use(seg.limitador({ ventanaMin: 15, max: 600 }));
 api.use(seg.antiCsrf);
 api.use(seg.cargarSesion);
-/* Para un cron externo (p. ej. cron-job.org) si el servicio gratuito de Render estuvo dormido. Requiere CRON_SECRET. */
-api.get('/cron/mantenimiento', async (req, res) => {
-  const clave = process.env.CRON_SECRET;
-  if (!clave || req.headers.authorization !== `Bearer ${clave}`) return res.status(401).json({ error: 'No autorizado.' });
-  await mantenimiento();
-  res.json({ ok: true, fecha: ahora() });
-});
 api.use(require('./lugares').router);
 api.use(require('./auth').router);
 api.use(require('./animales').router);
@@ -163,10 +154,12 @@ function iniciar() {
     console.log(arranque.amarillo('    Si no los editaste tú, vuelve a copiarlos (o descomprime de nuevo el proyecto).'));
   }
 
-  const servidor = app.listen(PUERTO, () => {
+  // Solo local: por defecto el servidor escucha únicamente en esta computadora (127.0.0.1), no en la red
+  const HOST = process.env.HOST || '127.0.0.1';
+  const servidor = app.listen(PUERTO, HOST, () => {
     const dir = arranque.direcciones(PUERTO);
     console.log(arranque.verde(`[✓] Dopta en ${dir.local}`));
-    if (dir.red.length) console.log(`    Desde otro dispositivo en la misma red: ${dir.red.join('  ·  ')}`);
+    if (HOST === '0.0.0.0' && dir.red.length) console.log(arranque.amarillo(`[!] HOST=0.0.0.0: también es accesible desde la red: ${dir.red.join('  ·  ')}`));
     if (process.env.ABRIR_NAVEGADOR === '1') abrirNavegador(dir.local);
   });
   servidor.on('error', (e) => {

@@ -2,9 +2,9 @@
      npm run db                                   crea o actualiza las tablas (database/schema.sql)
      npm run admin -- correo@x.com "Nombre" Clave123   crea el ÚNICO Administrador (--reemplazar para cambiarlo)
      npm run demo                                 carga refugios, animales y un adoptante de prueba
-     npm run respaldo                             respaldo con pg_dump y rotación (RNF-06)
+     npm run respaldo                             respaldo con mysqldump y rotación (RNF-06)
      npm run empaquetar                           zip de entrega SIN .env ni node_modules
-     npm run verificar                            diagnóstico completo: Node, dependencias, .env, PostgreSQL, tablas y archivos */
+     npm run verificar                            diagnóstico completo: Node, dependencias, .env, MySQL, tablas y archivos */
 const arranque = require('./arranque');
 
 arranque.prepararEnv();
@@ -49,11 +49,11 @@ async function demo() {
   const t = ahora();
   const hash = await bcrypt.hash('Demo12345', 12);
   const usuario = async (tipo, nombre, correo, telefono = null) => {
-    const ex = await uno("SELECT id FROM usuarios WHERE lower(correo) = ? AND estado NOT IN ('baja','eliminada')", [correo]);
+    const ex = await uno("SELECT id FROM usuarios WHERE correo = ? AND estado NOT IN ('baja','eliminada')", [correo]);
     if (ex) return ex.id;
     const r = await q(
       `INSERT INTO usuarios (tipo, nombre, correo, telefono, hash, estado, aviso_version, aviso_fecha, creado, verificado_en, mayor_edad_en)
-       VALUES (?, ?, ?, ?, ?, 'activa', 'v1.0', ?, ?, ?, ?) RETURNING id`, [tipo, nombre, correo, telefono, hash, t, t, t, t]);
+       VALUES (?, ?, ?, ?, ?, 'activa', 'v1.0', ?, ?, ?, ?)`, [tipo, nombre, correo, telefono, hash, t, t, t, t]);
     return r.insertId;
   };
   const refugios = [
@@ -65,10 +65,10 @@ async function demo() {
     const rid = await usuario('refugio', n, m);
     ids.push(rid);
     await q(`INSERT INTO refugios (usuario_id, institucion, direccion, calle, num_ext, num_int, colonia, cp, telefono, alcaldia_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (usuario_id) DO NOTHING`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE usuario_id = usuario_id`,
     [rid, `Asociación ${n} A.C.`, `${calle} ${ext}, Col. ${col}, C.P. ${cp}`, calle, ext, int, col, cp, tel, await id('alcaldia', alc)]);
     for (let dia = 0; dia < 7; dia++) {
-      await q('INSERT INTO refugio_horarios (refugio_id, dia, cerrado, abre, cierra) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING',
+      await q('INSERT INTO refugio_horarios (refugio_id, dia, cerrado, abre, cierra) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE refugio_id = refugio_id',
         [rid, dia, dia === 6 ? 1 : 0, dia === 6 ? null : '10:00', dia === 6 ? null : (dia === 5 ? '14:00' : '18:00')]);
     }
   }
@@ -100,7 +100,7 @@ async function demo() {
         `INSERT INTO animales (refugio_id, nombre, raza, raza_aprox, edad_id, tamano_id, salud_general, tratamiento,
                                temp_general, temp_perros, temp_desconocidos, temp_comida, fecha_ingreso,
                                esterilizado, fecha_esterilizacion, desparasitado, peso_kg, altura_cm, publicado_en, actualizado_en)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?) RETURNING id`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
         [ids[i % 2], n, raza, aprox, await id('edad', edad), await id('tamano', tam),
           ['excelente', 'bueno', 'bueno', 'regular'][i % 4], ['no', 'no', 'dieta', 'no', 'medicamento'][i % 5],
           ['jugueton', 'tranquilo', 'activo', 'tranquilo', 'nervioso'][i % 5], ['sociable', 'selectivo', 'sociable', 'unico'][i % 4],
@@ -116,24 +116,23 @@ async function demo() {
   console.log('  Refugios: refugio1@dopta.demo, refugio2@dopta.demo · Adoptante: adoptante@dopta.demo');
 }
 
-/* RNF-06: respaldo con pg_dump (cliente de PostgreSQL), conserva los últimos RESPALDO_DIAS archivos.
-   Supabase también hace respaldos diarios automáticos; este sirve para tener una copia propia. */
+/* RNF-06: respaldo con mysqldump (viene con MySQL), conserva los últimos RESPALDO_DIAS archivos. */
 function respaldo() {
   const dir = path.resolve(process.env.RESPALDO_DIR || 'respaldos');
   fs.mkdirSync(dir, { recursive: true });
   const archivo = path.join(dir, `dopta_${ahora().replace(/[: ]/g, '-')}.sql`);
   const c = require('./db').config();
-  const args = c.connectionString
-    ? ['--no-owner', '--no-privileges', '--dbname', c.connectionString]
-    : ['--no-owner', '--no-privileges', '-h', c.host, '-p', String(c.port), '-U', c.user, c.database];
+  const args = ['--host', c.host, '--port', String(c.port), '--user', c.user,
+    '--single-transaction', '--routines', '--no-tablespaces', '--default-character-set=utf8mb4', c.database];
   return new Promise((ok, mal) => {
-    const p = spawn(process.env.PG_DUMP || 'pg_dump', args, { env: { ...process.env, PGPASSWORD: c.password || '', PGSSLMODE: c.ssl ? 'require' : 'prefer' } });
+    // La contraseña va por variable de entorno (no aparece en la lista de procesos)
+    const p = spawn(process.env.MYSQLDUMP || 'mysqldump', args, { env: { ...process.env, MYSQL_PWD: c.password || '' } });
     const out = fs.createWriteStream(archivo);
     p.stdout.pipe(out);
     p.stderr.on('data', (d) => process.stderr.write(d));
-    p.on('error', (e) => mal(e.code === 'ENOENT' ? new Error('No se encontró pg_dump. Instala el cliente de PostgreSQL o indica su ruta en PG_DUMP.') : e));
+    p.on('error', (e) => mal(e.code === 'ENOENT' ? new Error('No se encontró mysqldump. Agrega la carpeta bin de MySQL al PATH o indica su ruta completa en MYSQLDUMP (archivo .env).') : e));
     p.on('close', (code) => {
-      if (code !== 0) return mal(new Error(`pg_dump terminó con código ${code}`));
+      if (code !== 0) { fs.rmSync(archivo, { force: true }); return mal(new Error(`mysqldump terminó con código ${code}`)); }
       const viejos = fs.readdirSync(dir).filter((f) => /^dopta_.*\.sql$/.test(f)).sort().reverse()
         .slice(Number(process.env.RESPALDO_DIAS || 30));
       viejos.forEach((f) => fs.unlinkSync(path.join(dir, f)));
@@ -145,7 +144,7 @@ function respaldo() {
 
 /* Zip de entrega con lista blanca: solo entra lo necesario para instalar el proyecto.
    Nunca incluye .env (contraseñas), node_modules, respaldos ni la versión antigua. */
-const ENTREGA = ['public', 'server', 'database', 'package.json', 'package-lock.json', '.env.example', '.gitignore', '.gitattributes', 'README.md', 'render.yaml'];
+const ENTREGA = ['public', 'server', 'database', 'package.json', 'package-lock.json', '.env.example', '.gitignore', '.gitattributes', 'README.md'];
 function empaquetar() {
   const n = arranque.generarManifiesto(); // huella de cada archivo para detectar copias desactualizadas
   console.log(`Manifiesto actualizado (${n} archivos, versión ${arranque.VERSION}).`);
@@ -184,9 +183,9 @@ async function verificar() {
   const pkg = require('../package.json');
   const faltan = Object.keys(pkg.dependencies).filter((d) => { try { require.resolve(d); return false; } catch { return true; } });
   if (faltan.length) mal(`Faltan dependencias: ${faltan.join(', ')}. Ejecuta npm install`); else bien('Dependencias instaladas');
-  bien(`Configuración (PostgreSQL: ${require('./db').descripcion()})`);
+  bien(`Configuración (${require('./db').descripcion()})`);
   const problema = await arranque.prepararBD();
-  if (problema) mal(problema); else bien('PostgreSQL conectado y tablas al día');
+  if (problema) mal(problema); else bien('MySQL conectado y tablas al día');
   const rev = arranque.revisarArchivos();
   if (rev.sinManifiesto) aviso('Sin manifiesto de archivos (se genera con npm run empaquetar)');
   else if (rev.faltan.length || rev.distintos.length) {

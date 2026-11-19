@@ -61,7 +61,7 @@ async function guardarRefugio(conn, id, d, nuevo) {
   }
   for (const x of d.horario) {
     await q(`INSERT INTO refugio_horarios (refugio_id, dia, cerrado, abre, cierra) VALUES (?, ?, ?, ?, ?)
-             ON CONFLICT (refugio_id, dia) DO UPDATE SET cerrado = EXCLUDED.cerrado, abre = EXCLUDED.abre, cierra = EXCLUDED.cierra`,
+             ON DUPLICATE KEY UPDATE cerrado = VALUES(cerrado), abre = VALUES(abre), cierra = VALUES(cierra)`,
     [id, x.dia, x.cerrado, x.abre, x.cierra], conn);
   }
 }
@@ -79,7 +79,7 @@ r.post('/auth/registro', limiteRegistro, h(async (req, res) => {
   if (typeof b.confirmar === 'string' && b.confirmar !== pass) falla('Las contraseñas no coinciden.');
   // Protocolo de adopción CDMX: solo personas mayores de edad pueden adoptar
   if (tipo === 'adoptante' && b.mayor_edad !== true) falla('Para adoptar debes ser mayor de 18 años. Confirma la casilla de mayoría de edad.');
-  if (await uno(`SELECT id FROM usuarios WHERE lower(correo) = ? AND ${VIGENTE}`, [mail])) falla('El correo electrónico ya está registrado.', 409);
+  if (await uno(`SELECT id FROM usuarios WHERE correo = ? AND ${VIGENTE}`, [mail])) falla('El correo electrónico ya está registrado.', 409);
   const inst = tipo === 'refugio' ? await validarRefugio(b) : null;
   const telefono = tipo === 'adoptante' ? await V.telefonoLibre(V.telefono(b.telefono)) : null; // el refugio lo usa para contactarlo
 
@@ -88,12 +88,12 @@ r.post('/auth/registro', limiteRegistro, h(async (req, res) => {
   await tx(async (c) => {
     const ins = await q(
       `INSERT INTO usuarios (tipo, nombre, correo, telefono, hash, estado, aviso_version, aviso_fecha, creado, mayor_edad_en)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [tipo, nombre, mail, telefono, hash, tipo === 'refugio' ? 'pendiente' : 'activa', AVISO_VERSION, t.slice(0, 16) + ':00', t,
         tipo === 'adoptante' ? t : null], c);
     if (inst) await guardarRefugio(c, ins.insertId, inst, true);
   }).catch((e) => {
-    if (e.code === 'ER_DUP_ENTRY') falla(/telefono/.test(e.constraint || '') ? 'Ese teléfono ya está registrado en otra cuenta.' : 'El correo electrónico ya está registrado.', 409);
+    if (e.code === 'ER_DUP_ENTRY') falla(/for key '[^']*uq_telefono/.test(e.sqlMessage || '') ? 'Ese teléfono ya está registrado en otra cuenta.' : 'El correo electrónico ya está registrado.', 409);
     throw e;
   });
 
@@ -107,7 +107,7 @@ r.post('/auth/revalidar', limiteLogin, h(async (req, res) => {
   const b = req.body || {};
   if (vacio(b.correo, b.contrasena, b.nombre)) falla('Complete todos los campos obligatorios.');
   const mail = V.correo(b.correo);
-  const u = await uno(`SELECT id, hash, estado, tipo FROM usuarios WHERE lower(correo) = ? AND ${VIGENTE}`, [mail]);
+  const u = await uno(`SELECT id, hash, estado, tipo FROM usuarios WHERE correo = ? AND ${VIGENTE}`, [mail]);
   const ok = await bcrypt.compare(String(b.contrasena), u ? u.hash : HASH_FALSO);
   if (!u || !ok || u.tipo !== 'refugio' || u.estado !== 'rechazada') falla('Correo o contraseña incorrectos.', 401);
   const nombre = V.nombreRefugio(b.nombre);
@@ -127,7 +127,7 @@ r.post('/auth/login', limiteLogin, h(async (req, res) => {
   if (!mail || mail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mail) || pass.length < 8 || pass.length > 64) {
     falla('Complete los campos con un formato válido.');
   }
-  const u = await uno(`SELECT id, tipo, nombre, correo, hash, estado, avatar_v FROM usuarios WHERE lower(correo) = ? AND ${VIGENTE}`, [mail]);
+  const u = await uno(`SELECT id, tipo, nombre, correo, hash, estado, avatar_v FROM usuarios WHERE correo = ? AND ${VIGENTE}`, [mail]);
   const ok = await bcrypt.compare(pass, u ? u.hash : HASH_FALSO);
   if (!u || !ok || u.estado === 'baja' || u.estado === 'eliminada') falla('Correo o contraseña incorrectos.', 401);
   if (u.estado === 'pendiente') falla('Su cuenta está pendiente de verificación.', 403);
@@ -158,12 +158,11 @@ r.post('/auth/recuperar', limitador({ ventanaMin: 60, max: 20 }), h(async (req, 
   if (Number(n.n) >= 3) falla('Ha alcanzado el límite de 3 solicitudes por hora. Intente más tarde.', 429);
   await q('INSERT INTO recuperacion_intentos (correo, creado_en) VALUES (?, ?)', [mail, ahora()]);
 
-  const u = await uno("SELECT id, nombre FROM usuarios WHERE lower(correo) = ? AND estado = 'activa'", [mail]);
+  const u = await uno("SELECT id, nombre FROM usuarios WHERE correo = ? AND estado = 'activa'", [mail]);
   if (u) {
     const token = crypto.randomBytes(32).toString('base64url');
     await q('INSERT INTO recuperaciones (token_hash, usuario_id, expira_en) VALUES (?, ?, ?)', [sha256(token), u.id, enMin(30)]);
-    const render = process.env.RENDER_EXTERNAL_URL || '';
-    const base = (process.env.BASE_URL || render || `${req.protocol}://${req.headers.host}`).replace(/\/$/, '');
+    const base = (process.env.BASE_URL || `${req.protocol}://${req.headers.host}`).replace(/\/$/, '');
     correo.enviarRecuperacion(mail, u.nombre, `${base}/#/restablecer?token=${token}`).catch((e) => console.error('Correo:', e.message));
   }
   // Misma respuesta exista o no la cuenta (CA3)
@@ -204,7 +203,7 @@ r.get('/cuenta', requiere(), h(async (req, res) => {
   const u = await uno('SELECT id, tipo, nombre, correo, telefono, creado, aviso_version, avatar_v, mayor_edad_en IS NOT NULL AS mayor_edad FROM usuarios WHERE id = ?', [req.usuario.id]);
   if (u.tipo === 'refugio') {
     u.refugio = await uno('SELECT institucion FROM refugios WHERE usuario_id = ?', [u.id]);
-    u.cambio_pendiente = await uno("SELECT id, datos, LEFT(creado_en::text, 16) AS creado_en FROM refugio_cambios WHERE refugio_id = ? AND estado = 'pendiente'", [u.id]);
+    u.cambio_pendiente = await uno("SELECT id, datos, LEFT(creado_en, 16) AS creado_en FROM refugio_cambios WHERE refugio_id = ? AND estado = 'pendiente'", [u.id]);
   }
   res.json(u);
 }));
@@ -243,7 +242,7 @@ r.put('/cuenta/avatar', requiere(), limitador({ ventanaMin: 15, max: 20 }), h(as
   if (buf.length > 300 * 1024) falla('La foto es demasiado grande (máximo 300 KB).', 413);
   await tx(async (c) => {
     await q(`INSERT INTO avatares (usuario_id, tipo, datos, creado_en) VALUES (?, ?, ?, ?)
-             ON CONFLICT (usuario_id) DO UPDATE SET tipo = EXCLUDED.tipo, datos = EXCLUDED.datos, creado_en = EXCLUDED.creado_en`,
+             ON DUPLICATE KEY UPDATE tipo = VALUES(tipo), datos = VALUES(datos), creado_en = VALUES(creado_en)`,
     [req.usuario.id, TIPOS_IMG[ext], buf, ahora()], c);
     await q('UPDATE usuarios SET avatar_v = avatar_v + 1 WHERE id = ?', [req.usuario.id], c);
   });

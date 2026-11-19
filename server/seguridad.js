@@ -4,8 +4,8 @@ const helmet = require('helmet');
 const { q, uno } = require('./db');
 const { ahora, haceMin, falla } = require('./util');
 
-const PROD = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
-const COOKIE = PROD ? '__Host-dopta_sid' : 'dopta_sid';
+/* Dopta corre solo en esta computadora, por HTTP (http://localhost): sin cookies Secure, HSTS ni redirección a HTTPS. */
+const COOKIE = 'dopta_sid';
 const INACTIVIDAD_MIN = 30;
 
 /* ---------- Cabeceras HTTP seguras ---------- */
@@ -24,21 +24,12 @@ const cabeceras = helmet({
       baseUri: ["'none'"],
       formAction: ["'self'"],
       frameAncestors: ["'none'"],                              // evita clickjacking
-      ...(PROD ? { upgradeInsecureRequests: [] } : {}),
     },
   },
-  hsts: PROD ? { maxAge: 31536000, includeSubDomains: true } : false,
+  hsts: false,
   referrerPolicy: { policy: 'same-origin' },
   crossOriginEmbedderPolicy: false,
 });
-
-/* Redirige a HTTPS en producción (RNF-03, TLS 1.2+ lo pone el hosting o el proxy) */
-const forzarHttps = (req, res, next) => {
-  if (PROD && req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] !== 'https') {
-    return res.redirect(301, `https://${req.headers.host}${req.originalUrl}`);
-  }
-  next();
-};
 
 /* ---------- Límite de peticiones en memoria ---------- */
 function limitador({ ventanaMin, max, clave = (req) => req.ip, mensaje = 'Demasiadas solicitudes. Intente más tarde.' }) {
@@ -87,9 +78,7 @@ const leerCookie = (req) => {
   return null;
 };
 
-const opcionesCookie = () => [
-  'Path=/', 'HttpOnly', 'SameSite=Strict', ...(PROD ? ['Secure'] : []),
-];
+const opcionesCookie = () => ['Path=/', 'HttpOnly', 'SameSite=Strict'];
 
 async function crearSesion(res, usuarioId, ip) {
   const token = crypto.randomBytes(32).toString('base64url');
@@ -163,6 +152,6 @@ const bloquearSondeos = (req, res, next) => {
 };
 
 module.exports = {
-  PROD, cabeceras, forzarHttps, limitador, antiCsrf, cargarSesion, requiere,
+  cabeceras, limitador, antiCsrf, cargarSesion, requiere,
   crearSesion, cerrarSesion, borrarCookie, sha256, bloquearSondeos, falla,
 };

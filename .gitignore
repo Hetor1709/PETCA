@@ -2,7 +2,6 @@ node_modules/
 .env
 respaldos/
 entrega/
-.vercel/
 .env.*
 !.env.example
 *.log

@@ -1,49 +1,78 @@
-# Dopta · sitio estático (HTML, CSS, JavaScript y JSON)
+# Dopta · plataforma de adopción de perros (CDMX)
 
-Dopta ya no necesita Node.js ni PostgreSQL. Todo corre en el navegador:
+Aplicación web que corre **solo en tu computadora**: servidor Node.js (Express) + base de datos **MySQL** local. No usa servicios en la nube.
 
-- `public/index.html`, `public/app.css`, `public/app.js`: interfaz (sin cambios de fondo).
-- `public/js/servidor.js`: sustituye a la antigua API. Atiende las llamadas `/api/...` con la misma lógica de validación, solicitudes, citas, adopciones, refugios, reportes y estadísticas.
-- `public/data/catalogos.json`, `public/data/razas.json`, `public/data/cp_cdmx.json`: datos iniciales (catálogos, razas y códigos postales de la CDMX).
-- `public/data/esquema.json`: estructura de las tablas (equivalente a la antigua `database/schema.sql`).
+## Requisitos
 
-## Cómo abrirlo
+- [Node.js](https://nodejs.org) 18 o más reciente (LTS recomendado).
+- [MySQL Community Server](https://dev.mysql.com/downloads/mysql/) **8.0.16 o más reciente**, con el servicio iniciado. MariaDB no es compatible (Dopta usa `FOR UPDATE OF`, columnas JSON y restricciones `CHECK` de MySQL 8).
 
-Hay que servir la carpeta con cualquier servidor estático (no sirve abrir el HTML con doble clic, porque el navegador no carga los JSON). Por ejemplo:
+## Puesta en marcha
 
 ```bash
-npx serve public
+npm install            # solo la primera vez (npm start lo hace solo si faltan dependencias)
+npm start
 ```
 
-o subir la carpeta a un hosting estático (GitHub Pages, Hostinger, Netlify).
+La primera vez, `npm start`:
 
-## Crear la cuenta de Administrador
+1. crea el archivo `.env` a partir de `.env.example` (si no existía);
+2. se conecta a MySQL, **crea la base `dopta`** si no existe y **crea las tablas** (`database/schema.sql`);
+3. abre el servidor en <http://localhost:3000>.
 
-Desde la consola del navegador en la página de Dopta (solo se puede crear uno):
+Si tu MySQL tiene contraseña para `root` (lo normal), ponla en `DB_PASSWORD` dentro de `.env` y vuelve a ejecutar `npm start`. Mientras MySQL no esté disponible, la API responde con el motivo exacto y el servidor reintenta cada 5 segundos.
 
-```js
-await DoptaServidor.crearAdministrador('correo@ejemplo.com', 'Nombre Completo', 'Clave12345')
+## Configuración (`.env`)
+
+| Variable | Para qué sirve | Por defecto |
+|---|---|---|
+| `PORT` | Puerto del sitio | `3000` |
+| `HOST` | Dirección en la que escucha. `127.0.0.1` = solo esta computadora; `0.0.0.0` = también la red | `127.0.0.1` |
+| `DB_HOST`, `DB_PORT` | Dónde corre MySQL | `127.0.0.1`, `3306` |
+| `DB_USER`, `DB_PASSWORD` | Credenciales de MySQL | `root`, *(vacía)* |
+| `DB_NAME` | Nombre de la base | `dopta` |
+| `SMTP_*` | Correo para recuperar contraseña. Vacío = el enlace se imprime en la consola donde corre `npm start` | vacío |
+| `VALIDAR_CORREO_DNS` | `1` revisa que el dominio del correo exista (necesita internet) | `1` |
+| `GOOGLE_MAPS_*` | Autocompletado de direcciones y mapa del administrador (opcional) | vacío |
+
+El usuario de MySQL necesita permisos para crear la base (solo la primera vez) y para crear tablas, consultar y modificar datos en ella. Si prefieres no usar `root`:
+
+```sql
+CREATE USER 'dopta'@'localhost' IDENTIFIED BY 'una_clave';
+GRANT ALL PRIVILEGES ON dopta.* TO 'dopta'@'localhost';
 ```
 
-## Dónde se guardan los datos
+y pon `DB_USER=dopta` y `DB_PASSWORD=una_clave` en `.env` (con este usuario, crea antes la base: `CREATE DATABASE dopta CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`).
 
-Cada navegador tiene su propia copia en `localStorage` (clave `dopta.datos.v2`). Los refugios, perros y solicitudes registrados en una computadora no aparecen en otra. Para mover o respaldar datos:
+## Comandos
 
-```js
-// Respaldo
-const txt = DoptaServidor.exportarRespaldo();
-// Restaurar
-await DoptaServidor.importarRespaldo(txt);
+| Comando | Qué hace |
+|---|---|
+| `npm start` | Inicia el sitio |
+| `npm run dev` | Igual, reiniciando al editar archivos del servidor |
+| `npm run db` | Crea o actualiza las tablas sin iniciar el sitio |
+| `npm run admin -- correo@x.com "Nombre" Clave123` | Crea el **único** Administrador (`--reemplazar` para cambiarlo) |
+| `npm run demo` | Carga refugios, perros y un adoptante de prueba (contraseña `Demo12345`) |
+| `npm run respaldo` | Respaldo con `mysqldump` en `respaldos/` (conserva los últimos `RESPALDO_DIAS`) |
+| `npm run verificar` | Diagnóstico: Node, dependencias, `.env`, MySQL, tablas y archivos |
+| `npm run empaquetar` | Zip de entrega sin `.env` ni `node_modules` |
+
+Para restaurar un respaldo: `mysql -u root -p dopta < respaldos/dopta_AAAA-MM-DD-....sql`.
+
+## Estructura
+
+```
+server/      API (Express) y acceso a MySQL
+  db.js        conexión (mysql2), consultas preparadas y transacciones
+  arranque.js  crea la base y las tablas, diagnóstico de arranque
+  ...          auth, animales, solicitudes, admin, cambios, lugares
+database/schema.sql   esquema MySQL (idempotente)
+public/      interfaz (HTML, CSS y JavaScript que sirve el propio servidor)
 ```
 
-## Limitaciones frente a la versión con servidor
+## Notas sobre MySQL
 
-- **Sin base de datos compartida:** no hay sincronización entre dispositivos.
-- **Seguridad:** las contraseñas se guardan con PBKDF2 en el navegador, pero cualquiera con acceso al navegador puede leer los datos. No es adecuado para datos personales reales en producción.
-- **Recuperar contraseña:** no se envía correo. El enlace aparece en pantalla.
-- **Autocompletado de direcciones con Google:** desactivado (una clave de Google no puede ser secreta en el navegador). La dirección se escribe a mano.
-- **Revisión de teléfonos:** solo formato y series inventadas; ya no se consulta la LADA.
-- **Revisión de dominios de correo (DNS):** ya no se hace.
-- **Límites de intentos:** solo en memoria de la pestaña.
-
-Los archivos Node antiguos (`server/`, `database/`, `package.json`, `package-lock.json`, `.env.example`) ya no se usan y pueden eliminarse; siguen disponibles en el historial de git.
+- Las fechas se guardan como `DATETIME`/`DATE` en hora de la Ciudad de México (las calcula el servidor).
+- La base usa la collation `utf8mb4_unicode_ci`: las búsquedas ignoran mayúsculas y acentos.
+- MySQL no tiene índices únicos parciales; las reglas "correo y teléfono únicos solo entre cuentas vigentes", "un solo administrador" y "un solo cambio pendiente por refugio" se aplican con columnas generadas (`correo_vigente`, `telefono_vigente`, `es_admin`, `pendiente_de`) que el servidor nunca escribe.
+- Si `npm start` dice que el esquema no se pudo aplicar, revisa primero la versión de MySQL (`SELECT VERSION();`).

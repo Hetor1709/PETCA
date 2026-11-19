@@ -63,7 +63,7 @@ async function aplicarCambio(c, cambio) {
   if (Array.isArray(d.horario)) {
     for (const x of d.horario) {
       await q(`INSERT INTO refugio_horarios (refugio_id, dia, cerrado, abre, cierra) VALUES (?, ?, ?, ?, ?)
-               ON CONFLICT (refugio_id, dia) DO UPDATE SET cerrado = EXCLUDED.cerrado, abre = EXCLUDED.abre, cierra = EXCLUDED.cierra`,
+               ON DUPLICATE KEY UPDATE cerrado = VALUES(cerrado), abre = VALUES(abre), cierra = VALUES(cierra)`,
       [cambio.refugio_id, x.dia, x.cerrado, x.abre, x.cierra], c);
     }
   }

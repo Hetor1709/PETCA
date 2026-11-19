@@ -1,7 +1,7 @@
 {
   "name": "dopta-web",
   "version": "2.0.0",
-  "description": "Dopta · Plataforma de apoyo a la adopción de perros en refugios de la CDMX",
+  "description": "Dopta · Plataforma de apoyo a la adopción de perros en refugios de la CDMX (servidor local con MySQL)",
   "main": "server/inicio.js",
   "private": true,
   "scripts": {
@@ -23,7 +23,7 @@
     "express": "^4.21.2",
     "helmet": "^7.2.0",
     "libphonenumber-js": "^1.13.15",
-    "nodemailer": "^10.2.1",
-    "pg": "^8.23.1"
+    "mysql2": "^3.11.5",
+    "nodemailer": "^10.2.1"
   }
 }

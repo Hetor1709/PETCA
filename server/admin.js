@@ -65,7 +65,7 @@ r.get('/admin/refugios-pendientes', soloAdmin, h(async (req, res) => {
     // Otras cuentas con el mismo teléfono o dirección (posible duplicado)
     x.coincidencias = await q(
       `SELECT u.id, u.nombre, u.estado FROM usuarios u JOIN refugios rf ON rf.usuario_id = u.id
-        WHERE u.id <> ? AND (rf.telefono = ? OR (rf.cp = ? AND sin_acentos(rf.calle) = sin_acentos(?) AND rf.num_ext = ?)) LIMIT 5`,
+        WHERE u.id <> ? AND (rf.telefono = ? OR (rf.cp = ? AND rf.calle = ? AND rf.num_ext = ?)) LIMIT 5`,
       [x.id, x.telefono, x.cp, x.calle, x.num_ext]);
   }
   res.json(lista);
@@ -94,7 +94,7 @@ r.get('/admin/refugios', soloAdmin, h(async (req, res) => {
   const where = ["u.tipo = 'refugio'", 'u.purgado = 0'];
   const params = [];
   const texto = limpiar(req.query.q).slice(0, 60);
-  if (texto) { where.push('(sin_acentos(u.nombre) LIKE ? OR sin_acentos(rf.institucion) LIKE ? OR sin_acentos(u.correo) LIKE ? OR rf.telefono LIKE ?)'); params.push(patron(texto), patron(texto), patron(texto), `%${texto.replace(/\D/g, '') || '¬'}%`); }
+  if (texto) { where.push('(u.nombre LIKE ? OR rf.institucion LIKE ? OR u.correo LIKE ? OR rf.telefono LIKE ?)'); params.push(patron(texto), patron(texto), patron(texto), `%${texto.replace(/\D/g, '') || '¬'}%`); }
   if (['activa', 'pendiente', 'rechazada', 'baja', 'eliminada'].includes(req.query.estado)) { where.push('u.estado = ?'); params.push(req.query.estado); }
   if (req.query.alcaldia) { where.push('rf.alcaldia_id = ?'); params.push(V.id(req.query.alcaldia)); }
   const ORDEN = { nombre: 'u.nombre', recientes: 'u.creado DESC', adopciones: 'adoptados DESC, u.nombre', reportes: 'reportes DESC, u.nombre' };
@@ -126,7 +126,7 @@ r.get('/admin/refugios/:id', soloAdmin, h(async (req, res) => {
        FROM animales a WHERE a.refugio_id = ? ORDER BY a.publicado_en DESC LIMIT 100`, [id]);
   x.reportes = await q("SELECT id, motivo, descripcion, estado, LEFT(creado_en, 10) AS creado FROM reportes WHERE objetivo_tipo = 'refugio' AND objetivo_id = ? ORDER BY id DESC LIMIT 20", [id]);
   x.cambios = await q('SELECT id, datos, anteriores, estado, motivo, LEFT(creado_en, 16) AS creado FROM refugio_cambios WHERE refugio_id = ? ORDER BY id DESC LIMIT 10', [id]);
-  const tiempos = await uno("SELECT AVG(adoptado_en - fecha_ingreso) AS dias FROM animales WHERE refugio_id = ? AND estado = 'adoptado'", [id]);
+  const tiempos = await uno("SELECT AVG(DATEDIFF(adoptado_en, fecha_ingreso)) AS dias FROM animales WHERE refugio_id = ? AND estado = 'adoptado'", [id]);
   x.dias_promedio_adopcion = tiempos.dias == null ? null : Math.round(Number(tiempos.dias));
   res.json(x);
 }));
@@ -192,7 +192,7 @@ r.get('/admin/cuentas', soloAdmin, h(async (req, res) => {
   const where = ['purgado = 0'];
   const params = [];
   const texto = limpiar(req.query.q).slice(0, 60);
-  if (texto) { where.push('(sin_acentos(nombre) LIKE ? OR sin_acentos(correo) LIKE ?)'); params.push(patron(texto), patron(texto)); }
+  if (texto) { where.push('(nombre LIKE ? OR correo LIKE ?)'); params.push(patron(texto), patron(texto)); }
   if (['adoptante', 'refugio', 'admin', 'funcionario'].includes(req.query.tipo)) { where.push('tipo = ?'); params.push(req.query.tipo); }
   const total = await uno(`SELECT COUNT(*) AS n FROM usuarios WHERE ${where.join(' AND ')}`, params);
   const lista = await q(`SELECT id, tipo, nombre, correo, telefono, estado, LEFT(creado, 10) AS creado, avatar_v FROM usuarios WHERE ${where.join(' AND ')} ORDER BY id DESC ${lim(p)}`, params);
@@ -322,7 +322,7 @@ async function generales(query) {
   const dias = diasEntre(p.inicio, p.fin) + 1;
   // Agrupa por día si el periodo es corto y por mes si es largo
   const porMes = dias > 62;
-  const grupo = (col) => (porMes ? `to_char(${col}, 'YYYY-MM')` : `to_char(${col}, 'YYYY-MM-DD')`);
+  const grupo = (col) => (porMes ? `DATE_FORMAT(${col}, '%Y-%m')` : `DATE_FORMAT(${col}, '%Y-%m-%d')`);
   const [pub, ado, ref, serieIng, serieAdo, serieSol, sol, tiempo, topRef, porTam, porAlc, rep] = await Promise.all([
     uno('SELECT COUNT(*) AS n FROM animales WHERE fecha_ingreso BETWEEN ? AND ?', [p.inicio, p.fin]),
     uno("SELECT COUNT(*) AS n FROM animales WHERE estado = 'adoptado' AND adoptado_en BETWEEN ? AND ?", [p.inicio, p.fin]),
@@ -335,18 +335,18 @@ async function generales(query) {
               OR (estado = 'eliminada' AND LEFT(eliminado_en, 10) >= ?))`, [p.fin, p.inicio, p.inicio]),
     q(`SELECT ${grupo('fecha_ingreso')} AS k, COUNT(*) AS n FROM animales WHERE fecha_ingreso BETWEEN ? AND ? GROUP BY 1`, [p.inicio, p.fin]),
     q(`SELECT ${grupo('adoptado_en')} AS k, COUNT(*) AS n FROM animales WHERE estado = 'adoptado' AND adoptado_en BETWEEN ? AND ? GROUP BY 1`, [p.inicio, p.fin]),
-    q(`SELECT ${grupo('enviada_en')} AS k, COUNT(*) AS n FROM solicitudes WHERE enviada_en::date BETWEEN ? AND ? GROUP BY 1`, [p.inicio, p.fin]),
+    q(`SELECT ${grupo('enviada_en')} AS k, COUNT(*) AS n FROM solicitudes WHERE DATE(enviada_en) BETWEEN ? AND ? GROUP BY 1`, [p.inicio, p.fin]),
     q(`SELECT CASE WHEN concretada_en IS NOT NULL THEN 'concretada' ELSE estado END AS e, COUNT(*) AS n
-         FROM solicitudes WHERE enviada_en::date BETWEEN ? AND ? GROUP BY 1`, [p.inicio, p.fin]),
-    uno("SELECT AVG(adoptado_en - fecha_ingreso) AS dias FROM animales WHERE estado = 'adoptado' AND adoptado_en BETWEEN ? AND ?", [p.inicio, p.fin]),
+         FROM solicitudes WHERE DATE(enviada_en) BETWEEN ? AND ? GROUP BY 1`, [p.inicio, p.fin]),
+    uno("SELECT AVG(DATEDIFF(adoptado_en, fecha_ingreso)) AS dias FROM animales WHERE estado = 'adoptado' AND adoptado_en BETWEEN ? AND ?", [p.inicio, p.fin]),
     q(`SELECT u.nombre, COUNT(*) AS n FROM animales a JOIN usuarios u ON u.id = a.refugio_id
         WHERE a.estado = 'adoptado' AND a.adoptado_en BETWEEN ? AND ? GROUP BY u.nombre ORDER BY n DESC LIMIT 5`, [p.inicio, p.fin]),
-    q(`SELECT t.nombre, COUNT(*) FILTER (WHERE a.estado = 'adoptado' AND a.adoptado_en BETWEEN ? AND ?) AS adoptados,
-              COUNT(*) FILTER (WHERE a.estado = 'disponible' AND a.eliminado = 0) AS disponibles
+    q(`SELECT t.nombre, COUNT(CASE WHEN a.estado = 'adoptado' AND a.adoptado_en BETWEEN ? AND ? THEN 1 END) AS adoptados,
+              COUNT(CASE WHEN a.estado = 'disponible' AND a.eliminado = 0 THEN 1 END) AS disponibles
          FROM animales a JOIN catalogo_valores t ON t.id = a.tamano_id GROUP BY t.nombre, t.orden ORDER BY t.orden`, [p.inicio, p.fin]),
     q(`SELECT al.nombre, COUNT(*) AS n FROM usuarios u JOIN refugios rf ON rf.usuario_id = u.id JOIN catalogo_valores al ON al.id = rf.alcaldia_id
         WHERE u.tipo = 'refugio' AND u.estado = 'activa' GROUP BY al.nombre ORDER BY n DESC`),
-    uno('SELECT COUNT(*) AS n FROM reportes WHERE creado_en::date BETWEEN ? AND ?', [p.inicio, p.fin]),
+    uno('SELECT COUNT(*) AS n FROM reportes WHERE DATE(creado_en) BETWEEN ? AND ?', [p.inicio, p.fin]),
   ]);
   // Serie completa (sin huecos) para las gráficas
   const claves = [];

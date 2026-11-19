@@ -106,7 +106,7 @@ r.post('/solicitudes', soloAdoptante, h(async (req, res) => {
     if (Number(mias.n) >= 5) falla('Tiene 5 solicitudes activas. No es posible enviar otra.', 409);
     const delAnimal = await uno("SELECT COUNT(*) AS n FROM solicitudes WHERE animal_id = ? AND estado IN ('pendiente','aprobada')", [animalId], c);
     if (Number(delAnimal.n) >= 20) falla('La publicación ya tiene 20 solicitudes activas.', 409);
-    const ins = await q('INSERT INTO solicitudes (animal_id, adoptante_id, cuestionario, compromiso_en, enviada_en) VALUES (?, ?, ?, ?, ?) RETURNING id',
+    const ins = await q('INSERT INTO solicitudes (animal_id, adoptante_id, cuestionario, compromiso_en, enviada_en) VALUES (?, ?, ?, ?, ?)',
       [animalId, req.usuario.id, JSON.stringify(cuestionario), t, t], c);
     if (mensaje) await q('INSERT INTO mensajes (solicitud_id, autor_id, texto, creado_en) VALUES (?, ?, ?, ?)', [ins.insertId, req.usuario.id, mensaje, t], c);
     await notificar(a.refugio_id, `Nueva solicitud de adopción para ${a.nombre} de ${req.usuario.nombre}.`, c, `#/refugio/solicitudes?id=${ins.insertId}`);
@@ -121,8 +121,8 @@ async function adjuntar(lista, yoId) {
   const ids = lista.map((x) => x.id);
   const msgs = await q(
     `SELECT m.id, m.solicitud_id, m.autor_id, m.texto, LEFT(m.creado_en, 16) AS creado, m.leido_en IS NOT NULL AS leido, u.tipo AS autor_tipo
-       FROM mensajes m JOIN usuarios u ON u.id = m.autor_id WHERE m.solicitud_id = ANY(?) ORDER BY m.id`, [ids]);
-  const segs = await q('SELECT id, solicitud_id, etapa, programado, realizado_en, resultado, notas FROM seguimientos WHERE solicitud_id = ANY(?) ORDER BY programado', [ids]);
+       FROM mensajes m JOIN usuarios u ON u.id = m.autor_id WHERE m.solicitud_id IN (?) ORDER BY m.id`, [ids]);
+  const segs = await q('SELECT id, solicitud_id, etapa, programado, realizado_en, resultado, notas FROM seguimientos WHERE solicitud_id IN (?) ORDER BY programado', [ids]);
   for (const s of lista) {
     // es_adoptante: el autor es quien adopta (puede ser una cuenta de refugio adoptando de otro refugio)
     s.mensajes = msgs.filter((m) => m.solicitud_id === s.id).map((m) => ({ ...m, mio: m.autor_id === yoId, es_adoptante: m.autor_id === s.adoptante_id }));
